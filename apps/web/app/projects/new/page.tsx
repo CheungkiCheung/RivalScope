@@ -1,5 +1,13 @@
 import { redirect } from "next/navigation";
-import { ProjectRepository, SourceRepository, prisma } from "@rivalscope/db";
+import {
+  ProjectRepository,
+  SourceRepository,
+  WorkflowRepository,
+  prisma
+} from "@rivalscope/db";
+import { demoDocumentsByUrl, demoSearchIndex } from "../../../lib/demo-source-fixtures";
+import { collectFixtureSources } from "../../../lib/source-ingestion";
+import { persistSourceCollectionRun } from "../../../lib/source-collection-persistence";
 
 const defaultSource = `Cursor offers individual Pro and Team plans for AI coding.
 Codex focuses on software engineering tasks through a coding agent workflow.
@@ -42,21 +50,44 @@ export default function NewProjectPage() {
       }))
     });
 
-    await new SourceRepository(prisma).create({
-      projectId: project.id,
-      kind: "TEXT",
-      title: "Seed competitive notes",
-      uri: "manual://seed-notes",
-      chunks: sourceText
-        .split("\n")
-        .map((line) => line.trim())
-        .filter(Boolean)
-        .map((line, index) => ({
-          ordinal: index,
-          text: line,
-          tokenCount: line.split(/\s+/).length
-        }))
+    const sourceRepository = new SourceRepository(prisma);
+    const collected = await collectFixtureSources({
+      competitors,
+      dimensions,
+      searchIndex: demoSearchIndex,
+      documentsByUrl: demoDocumentsByUrl,
+      maxWordsPerChunk: 80
     });
+
+    if (collected.sources.length > 0) {
+      await Promise.all(
+        collected.sources.map((source) =>
+          sourceRepository.create({
+            projectId: project.id,
+            kind: source.kind,
+            title: source.title,
+            uri: source.uri,
+            chunks: source.chunks
+          })
+        )
+      );
+      await persistSourceCollectionRun({
+        projectId: project.id,
+        sourceCount: collected.sources.length,
+        toolCalls: collected.toolCalls,
+        repositories: {
+          workflow: new WorkflowRepository(prisma)
+        }
+      });
+    } else {
+      await sourceRepository.create({
+        projectId: project.id,
+        kind: "TEXT",
+        title: "Seed competitive notes",
+        uri: "manual://seed-notes",
+        chunks: createManualChunks(sourceText)
+      });
+    }
 
     redirect(`/projects/${project.id}`);
   }
@@ -105,4 +136,16 @@ export default function NewProjectPage() {
       </form>
     </main>
   );
+}
+
+function createManualChunks(sourceText: string) {
+  return sourceText
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line, index) => ({
+      ordinal: index,
+      text: line,
+      tokenCount: line.split(/\s+/).filter(Boolean).length
+    }));
 }

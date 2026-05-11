@@ -295,6 +295,16 @@ textarea {
   padding: 14px;
 }
 
+.source-preview {
+  background: #f8fafc;
+  border-left: 3px solid #9aa8ff;
+  color: #344054;
+  font-size: 13px;
+  line-height: 1.55;
+  margin: 0;
+  padding: 8px 10px;
+}
+
 @media (max-width: 860px) {
   .metrics {
     grid-template-columns: repeat(2, minmax(0, 1fr));

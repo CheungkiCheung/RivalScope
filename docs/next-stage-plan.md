@@ -37,14 +37,17 @@ Useful references:
 
 Goal: replace seeded source chunks with a real source-ingestion path.
 
+Status: partially implemented. The project now has structured source tools, a deterministic fixture search/fetch path for demos and tests, source preview in the project UI, and source collection tool calls persisted through workflow observability records. External search provider adapters are still pending.
+
 Tasks:
 
-1. Add `SearchTool` contract and mock implementation.
-2. Add `FetchUrlTool` contract with timeout, max-size, and content-type handling.
-3. Add `HtmlToTextTool` for deterministic extraction from fetched pages.
-4. Add `ChunkTextTool` with stable chunk IDs and token-count metadata.
-5. Persist tool calls and generated sources/chunks.
-6. Add UI for source collection status and parsed source preview.
+1. Done: Add `SearchTool` contract and mock implementation.
+2. Done: Add `FetchUrlTool` contract with timeout, max-size, and content-type handling.
+3. Done: Add `HtmlToTextTool` for deterministic extraction from fetched pages.
+4. Done: Add `ChunkTextTool` with stable chunk IDs and token-count metadata.
+5. Done: Persist tool calls and generated sources/chunks for fixture source collection.
+6. Done: Add UI for source collection status and parsed source preview.
+7. Pending: Add a real search provider adapter behind environment configuration.
 
 Acceptance criteria:
 

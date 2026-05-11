@@ -241,8 +241,15 @@ export default async function ProjectPage({ params }: ProjectPageProps) {
             <div className="list">
               {project.sources.map((source) => (
                 <div className="item" key={source.id}>
-                  <strong>{source.title}</strong>
+                  <div className="item-head">
+                    <strong>{source.title}</strong>
+                    <span className="pill">{source.kind}</span>
+                  </div>
+                  <span className="muted">{source.uri}</span>
                   <span className="muted">{source.chunks.length} chunks</span>
+                  {source.chunks[0] ? (
+                    <p className="source-preview">{source.chunks[0].text}</p>
+                  ) : null}
                 </div>
               ))}
             </div>

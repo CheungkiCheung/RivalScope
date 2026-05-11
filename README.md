@@ -35,8 +35,10 @@ The repository currently contains a complete MVP path:
 - In-memory artifact store.
 - Workflow runner that executes ready DAG nodes.
 - Mock Extract, Analyst, Writer, and Critic agents.
+- Real source-tooling contracts for fixture search, URL fetch, HTML-to-text extraction, and stable text chunking.
+- Source collection persistence through the same Workflow, AgentRun, and ToolCall observability records used by analysis runs.
 - PostgreSQL persistence through Prisma repositories.
-- Next.js web UI for project creation, DAG execution, report review, evidence inspection, workflow status, and tool-call observability.
+- Next.js web UI for project creation, source preview, DAG execution, report review, evidence inspection, workflow status, and tool-call observability.
 - End-to-end source chunks -> facts -> claims -> report -> review findings flow.
 - Critic checks for unsupported claims, unknown fact references, low-confidence claims, report sections without cited claims, unknown claim references, and missing required analysis dimensions.
 
