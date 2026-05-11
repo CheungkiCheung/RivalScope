@@ -1,0 +1,298 @@
+import Link from "next/link";
+import { redirect } from "next/navigation";
+import { ProjectRepository, prisma } from "@rivalscope/db";
+import { runAnalysis } from "../../../lib/run-analysis";
+
+export const dynamic = "force-dynamic";
+
+interface ProjectPageProps {
+  params: Promise<{ projectId: string }>;
+}
+
+export default async function ProjectPage({ params }: ProjectPageProps) {
+  const { projectId } = await params;
+  const project = await new ProjectRepository(prisma).get(projectId);
+
+  if (!project) {
+    return (
+      <main className="shell">
+        <div className="card">
+          <h1>Project not found</h1>
+          <Link className="button secondary" href="/">
+            Back
+          </Link>
+        </div>
+      </main>
+    );
+  }
+
+  async function runProject() {
+    "use server";
+    await runAnalysis(projectId);
+    redirect(`/projects/${projectId}`);
+  }
+
+  const latestReport = project.reports[0];
+  const latestWorkflow = project.workflows[0];
+  const workflowNodes = latestWorkflow?.nodes ?? [];
+  const agentRuns = workflowNodes.flatMap((node) => node.agentRuns ?? []);
+  const workflowToolCalls = agentRuns.flatMap((run) =>
+    run.toolCalls.map((toolCall) => ({
+      nodeId: run.workflowNodeId,
+      agentName: run.agentName,
+      ...toolCall
+    }))
+  );
+  const latestFindings = latestReport?.reviewFindings ?? [];
+  const reportSections = latestReport?.sections ?? [];
+  const allClaims = reportSections.flatMap((section) =>
+    section.claims.map((link) => link.claim)
+  );
+  const allFacts = allClaims.flatMap((claim) => claim.facts.map((link) => link.fact));
+
+  return (
+    <main className="shell">
+      <div className="topbar">
+        <div className="brand">
+          <h1>{project.name}</h1>
+          <p>{project.description}</p>
+        </div>
+        <form action={runProject}>
+          <button className="button" type="submit">
+            Run Agent DAG
+          </button>
+        </form>
+      </div>
+
+      <section className="metrics">
+        <div className="metric">
+          <span className="metric-label">Competitors</span>
+          <strong>{project.competitors.length}</strong>
+        </div>
+        <div className="metric">
+          <span className="metric-label">Dimensions</span>
+          <strong>{project.analysisDimensions.length}</strong>
+        </div>
+        <div className="metric">
+          <span className="metric-label">Facts</span>
+          <strong>{allFacts.length}</strong>
+        </div>
+        <div className="metric">
+          <span className="metric-label">Claims</span>
+          <strong>{allClaims.length}</strong>
+        </div>
+        <div className="metric">
+          <span className="metric-label">Findings</span>
+          <strong>{latestFindings.length}</strong>
+        </div>
+      </section>
+
+      <div className="grid two">
+        <section className="card">
+          <h2>Report</h2>
+          {!latestReport ? (
+            <p className="muted">No report yet. Run the Agent DAG to generate one.</p>
+          ) : (
+            <article className="report">
+              <div className="pill-row">
+                <span className={`status ${latestReport.status === "FINAL" ? "ok" : "warn"}`}>
+                  {latestReport.status}
+                </span>
+                {latestReport.qualityScore !== null ? (
+                  <span className="pill">Quality {latestReport.qualityScore}</span>
+                ) : null}
+                <span className="pill">Sections {latestReport.sections.length}</span>
+              </div>
+              <h2>{latestReport.title}</h2>
+              {reportSections.map((section) => (
+                <section className="report-section" key={section.id}>
+                  <h3>{section.title}</h3>
+                  <p>{section.body}</p>
+                  <div className="pill-row">
+                    {section.claims.map((link) => (
+                      <span className="pill" key={link.claimId}>
+                        {link.claim.dimension}
+                      </span>
+                    ))}
+                  </div>
+                  <div className="evidence-list">
+                    {section.claims.map((link) => (
+                      <div className="evidence-item" key={link.claimId}>
+                        <strong>{link.claim.statement}</strong>
+                        <span className="muted">
+                          {link.claim.kind} · confidence {Math.round(link.claim.confidence * 100)}%
+                        </span>
+                        <div className="evidence-facts">
+                          {link.claim.facts.map((factLink) => (
+                            <div className="evidence-fact" key={factLink.factId}>
+                              <span className="pill">{factLink.fact.dimension}</span>
+                              <p>{factLink.fact.statement}</p>
+                              <span className="muted">
+                                {factLink.fact.competitor.name} ·{" "}
+                                {factLink.fact.chunks.map((chunkLink) => chunkLink.chunk.text).join(" ")}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              ))}
+            </article>
+          )}
+        </section>
+
+        <aside className="grid">
+          <section className="card">
+            <h3>Workflow run</h3>
+            {!latestWorkflow ? (
+              <p className="muted">No workflow run yet.</p>
+            ) : (
+              <div className="list">
+                {workflowNodes.map((node) => {
+                  const latestRun = node.agentRuns[0];
+
+                  return (
+                    <div className="item" key={node.id}>
+                      <div className="item-head">
+                        <strong>{node.nodeKey}</strong>
+                        <span className={`status ${statusClass(node.status)}`}>{node.status}</span>
+                      </div>
+                      <span className="muted">{node.agentName}</span>
+                      {latestRun ? (
+                        <div className="subtle-block">
+                          <span className={`status ${statusClass(latestRun.status)}`}>
+                            {latestRun.status}
+                          </span>
+                          <span className="muted">
+                            {new Date(latestRun.startedAt).toLocaleTimeString("zh-CN")}
+                          </span>
+                          <span className="muted">tool calls {latestRun.toolCalls.length}</span>
+                        </div>
+                      ) : (
+                        <span className="muted">No agent run recorded.</span>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </section>
+
+          <section className="card">
+            <h3>Tool calls</h3>
+            {workflowToolCalls.length === 0 ? (
+              <p className="muted">No tool calls recorded yet.</p>
+            ) : (
+              <div className="list">
+                {workflowToolCalls.map((toolCall) => (
+                  <div className="item" key={toolCall.id}>
+                    <div className="item-head">
+                      <strong>{toolCall.toolName}</strong>
+                      <span className={`status ${toolCall.status === "SUCCEEDED" ? "ok" : "bad"}`}>
+                        {toolCall.status}
+                      </span>
+                    </div>
+                    <span className="muted">
+                      {toolCall.agentName} · {toolCall.nodeId}
+                    </span>
+                    <pre className="pre compact">
+                      {JSON.stringify(
+                        {
+                          input: toolCall.input,
+                          output: toolCall.output ?? null,
+                          errorMessage: toolCall.errorMessage ?? null
+                        },
+                        null,
+                        2
+                      )}
+                    </pre>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+
+          <section className="card">
+            <h3>Competitors</h3>
+            <div className="pill-row">
+              {project.competitors.map((competitor) => (
+                <span className="pill" key={competitor.id}>
+                  {competitor.name}
+                </span>
+              ))}
+            </div>
+          </section>
+
+          <section className="card">
+            <h3>Dimensions</h3>
+            <div className="pill-row">
+              {project.analysisDimensions.map((dimension) => (
+                <span className="pill" key={dimension.id}>
+                  {dimension.key}
+                </span>
+              ))}
+            </div>
+          </section>
+
+          <section className="card">
+            <h3>Sources</h3>
+            <div className="list">
+              {project.sources.map((source) => (
+                <div className="item" key={source.id}>
+                  <strong>{source.title}</strong>
+                  <span className="muted">{source.chunks.length} chunks</span>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          <section className="card">
+            <h3>Workflow</h3>
+            <div className="list">
+              {workflowNodes.map((node) => (
+                <div className="item" key={node.id}>
+                  <div className="item-head">
+                    <strong>{node.nodeKey}</strong>
+                    <span className={`status ${statusClass(node.status)}`}>{node.status}</span>
+                  </div>
+                  <span className="muted">{node.agentName}</span>
+                  <span className="muted">inputs {node.inputArtifactIds.length}</span>
+                  <span className="muted">outputs {node.outputArtifactIds.length}</span>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          {latestFindings.length ? (
+            <section className="card">
+              <h3>Critic Findings</h3>
+              <div className="list">
+                {latestFindings.map((finding) => (
+                  <div className="item" key={finding.id}>
+                    <span className="status bad">{finding.severity}</span>
+                    <strong>{finding.category}</strong>
+                    <p className="muted">{finding.message}</p>
+                  </div>
+                ))}
+              </div>
+            </section>
+          ) : null}
+        </aside>
+      </div>
+    </main>
+  );
+}
+
+function statusClass(status: string) {
+  if (status === "SUCCEEDED") {
+    return "ok";
+  }
+
+  if (status === "FAILED" || status === "BLOCKED") {
+    return "bad";
+  }
+
+  return "warn";
+}

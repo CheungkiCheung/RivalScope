@@ -1,0 +1,387 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum SourceKind {
+  URL
+  MARKDOWN
+  PDF
+  TEXT
+}
+
+enum WorkflowNodeStatus {
+  PENDING
+  READY
+  RUNNING
+  SUCCEEDED
+  FAILED
+  SKIPPED
+  BLOCKED
+}
+
+enum WorkflowNodeType {
+  AGENT
+  TOOL
+  MANUAL_REVIEW
+}
+
+enum AgentRunStatus {
+  RUNNING
+  SUCCEEDED
+  FAILED
+}
+
+enum ToolCallStatus {
+  SUCCEEDED
+  FAILED
+}
+
+enum ClaimKind {
+  SINGLE_COMPETITOR
+  COMPARATIVE
+  RECOMMENDATION
+}
+
+enum ReportStatus {
+  DRAFT
+  REVIEWED
+  FINAL
+}
+
+enum FindingSeverity {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum FindingCategory {
+  UNSUPPORTED_CLAIM
+  UNKNOWN_FACT
+  LOW_CONFIDENCE
+  UNCITED_REPORT_SECTION
+  UNKNOWN_CLAIM
+  MISSING_DIMENSION
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  projects Project[]
+}
+
+model Project {
+  id          String   @id @default(cuid())
+  ownerId     String
+  name        String
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  owner              User                @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  competitors        Competitor[]
+  analysisDimensions AnalysisDimension[]
+  sources            Source[]
+  facts              Fact[]
+  claims             Claim[]
+  workflows          Workflow[]
+  reports            Report[]
+  artifacts          Artifact[]
+  reviewFindings     ReviewFinding[]
+  humanFeedback      HumanFeedback[]
+
+  @@index([ownerId])
+}
+
+model Competitor {
+  id        String   @id @default(cuid())
+  projectId String
+  name      String
+  website   String?
+  isPrimary Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  facts   Fact[]
+
+  @@index([projectId])
+}
+
+model AnalysisDimension {
+  id          String   @id @default(cuid())
+  projectId   String
+  key         String
+  label       String
+  description String?
+  required    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, key])
+  @@index([projectId])
+}
+
+model Source {
+  id          String     @id @default(cuid())
+  projectId   String
+  kind        SourceKind
+  title       String
+  uri         String
+  collectedAt DateTime   @default(now())
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  project Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  chunks  SourceChunk[]
+
+  @@index([projectId])
+}
+
+model SourceChunk {
+  id         String   @id @default(cuid())
+  sourceId   String
+  ordinal    Int
+  text       String
+  tokenCount Int
+  createdAt  DateTime @default(now())
+
+  source Source @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  facts  FactSourceChunk[]
+
+  @@unique([sourceId, ordinal])
+  @@index([sourceId])
+}
+
+model Fact {
+  id           String   @id @default(cuid())
+  projectId    String
+  competitorId String
+  dimension    String
+  statement    String
+  confidence   Float
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  project    Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  competitor Competitor        @relation(fields: [competitorId], references: [id], onDelete: Cascade)
+  chunks     FactSourceChunk[]
+  claims     ClaimFact[]
+
+  @@index([projectId])
+  @@index([competitorId])
+  @@index([dimension])
+}
+
+model FactSourceChunk {
+  factId  String
+  chunkId String
+
+  fact  Fact        @relation(fields: [factId], references: [id], onDelete: Cascade)
+  chunk SourceChunk @relation(fields: [chunkId], references: [id], onDelete: Cascade)
+
+  @@id([factId, chunkId])
+  @@index([chunkId])
+}
+
+model Claim {
+  id         String    @id @default(cuid())
+  projectId  String
+  dimension  String
+  statement  String
+  confidence Float
+  kind       ClaimKind
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  project        Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  facts          ClaimFact[]
+  reportSections ReportSectionClaim[]
+  feedback       HumanFeedback[]
+
+  @@index([projectId])
+  @@index([dimension])
+}
+
+model ClaimFact {
+  claimId String
+  factId  String
+
+  claim Claim @relation(fields: [claimId], references: [id], onDelete: Cascade)
+  fact  Fact  @relation(fields: [factId], references: [id], onDelete: Cascade)
+
+  @@id([claimId, factId])
+  @@index([factId])
+}
+
+model Workflow {
+  id        String   @id @default(cuid())
+  projectId String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  project Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  nodes   WorkflowNode[]
+
+  @@index([projectId])
+}
+
+model WorkflowNode {
+  id                String             @id @default(cuid())
+  workflowId        String
+  nodeKey           String
+  type              WorkflowNodeType
+  agentName         String
+  dependsOn         String[]
+  status            WorkflowNodeStatus @default(PENDING)
+  inputArtifactIds  String[]
+  outputArtifactIds String[]
+  retryCount        Int                @default(0)
+  maxRetries        Int                @default(1)
+  currentAgentRunId String?
+  startedAt         DateTime?
+  finishedAt        DateTime?
+  errorMessage      String?
+
+  workflow  Workflow   @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  agentRuns AgentRun[]
+
+  @@unique([workflowId, nodeKey])
+  @@index([workflowId])
+  @@index([status])
+}
+
+model AgentRun {
+  id             String         @id @default(cuid())
+  workflowNodeId String
+  agentName      String
+  status         AgentRunStatus
+  input          Json
+  output         Json?
+  errorMessage   String?
+  startedAt      DateTime
+  finishedAt     DateTime?
+
+  workflowNode WorkflowNode @relation(fields: [workflowNodeId], references: [id], onDelete: Cascade)
+  toolCalls    ToolCall[]
+
+  @@index([workflowNodeId])
+  @@index([agentName])
+  @@index([status])
+}
+
+model ToolCall {
+  id           String         @id @default(cuid())
+  agentRunId   String
+  toolName     String
+  status       ToolCallStatus
+  input        Json
+  output       Json?
+  errorMessage String?
+  startedAt    DateTime
+  finishedAt   DateTime
+
+  agentRun AgentRun @relation(fields: [agentRunId], references: [id], onDelete: Cascade)
+
+  @@index([agentRunId])
+  @@index([toolName])
+  @@index([status])
+}
+
+model Artifact {
+  id        String   @id @default(cuid())
+  projectId String
+  kind      String
+  value     Json
+  createdAt DateTime @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+  @@index([kind])
+}
+
+model Report {
+  id           String       @id @default(cuid())
+  projectId    String
+  title        String
+  status       ReportStatus @default(DRAFT)
+  qualityScore Int?
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  project        Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  sections       ReportSection[]
+  reviewFindings ReviewFinding[]
+
+  @@index([projectId])
+  @@index([status])
+}
+
+model ReportSection {
+  id        String @id @default(cuid())
+  reportId  String
+  sectionKey String
+  title     String
+  body      String
+  ordinal   Int
+
+  report Report               @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  claims ReportSectionClaim[]
+
+  @@unique([reportId, sectionKey])
+  @@index([reportId])
+}
+
+model ReportSectionClaim {
+  reportSectionId String
+  claimId         String
+
+  reportSection ReportSection @relation(fields: [reportSectionId], references: [id], onDelete: Cascade)
+  claim         Claim         @relation(fields: [claimId], references: [id], onDelete: Cascade)
+
+  @@id([reportSectionId, claimId])
+  @@index([claimId])
+}
+
+model ReviewFinding {
+  id        String          @id @default(cuid())
+  projectId String
+  reportId  String?
+  severity  FindingSeverity
+  category  FindingCategory
+  message   String
+  createdAt DateTime        @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  report  Report? @relation(fields: [reportId], references: [id], onDelete: SetNull)
+
+  @@index([projectId])
+  @@index([reportId])
+  @@index([severity])
+  @@index([category])
+}
+
+model HumanFeedback {
+  id        String   @id @default(cuid())
+  projectId String
+  claimId   String?
+  rating    String
+  comment   String?
+  createdAt DateTime @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  claim   Claim?  @relation(fields: [claimId], references: [id], onDelete: SetNull)
+
+  @@index([projectId])
+  @@index([claimId])
+}
