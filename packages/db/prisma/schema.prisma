@@ -41,6 +41,11 @@ enum ToolCallStatus {
   FAILED
 }
 
+enum ModelCallStatus {
+  SUCCEEDED
+  FAILED
+}
+
 enum ClaimKind {
   SINGLE_COMPETITOR
   COMPARATIVE
@@ -273,6 +278,7 @@ model AgentRun {
 
   workflowNode WorkflowNode @relation(fields: [workflowNodeId], references: [id], onDelete: Cascade)
   toolCalls    ToolCall[]
+  modelCalls   ModelCall[]
 
   @@index([workflowNodeId])
   @@index([agentName])
@@ -294,6 +300,29 @@ model ToolCall {
 
   @@index([agentRunId])
   @@index([toolName])
+  @@index([status])
+}
+
+model ModelCall {
+  id             String          @id @default(cuid())
+  agentRunId     String
+  provider       String
+  model          String?
+  task           String
+  status         ModelCallStatus
+  responseFormat String?
+  input          Json
+  output         Json?
+  usage          Json?
+  errorMessage   String?
+  startedAt      DateTime
+  finishedAt     DateTime
+
+  agentRun AgentRun @relation(fields: [agentRunId], references: [id], onDelete: Cascade)
+
+  @@index([agentRunId])
+  @@index([provider])
+  @@index([task])
   @@index([status])
 }
 

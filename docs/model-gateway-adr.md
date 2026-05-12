@@ -21,12 +21,13 @@ OpenAI-compatible HTTP is the first real adapter because it is simple, widely su
 - `createOpenAICompatibleModelClient` calls `/chat/completions` with JSON mode when structured output is requested.
 - `generateStructuredObject` parses JSON and validates it with Zod.
 - Extract and Analyst agents can use a model client, but default to deterministic logic when no real provider is selected.
-- Model-backed agents treat model outputs as candidates: RivalScope assigns fact and claim IDs in code and rejects unknown `sourceChunkIds` or `factIds`.
-- The web app requires `RIVALSCOPE_ANALYSIS_AGENT_MODE="model"` before model-backed analysis agents are enabled, even if provider credentials are present.
+- Model-backed agents treat model outputs as candidates: RivalScope assigns fact and claim IDs in code, rejects unknown `sourceChunkIds` or `factIds`, and rejects fact competitors outside the project allowlist.
+- Model calls are captured as first-class `ModelCall` observability records with provider, model, task, bounded prompt trace input, bounded response content, token usage, status, and error context.
+- The web app requires `RIVALSCOPE_ANALYSIS_AGENT_MODE="model"` and `RIVALSCOPE_MODEL_PROVIDER="openai-compatible"` before model-backed analysis agents are enabled, even if provider credentials are present.
+- Failed model output validation is persisted as a failed agent run and visible workflow state; persistence no longer requires downstream report artifacts after an upstream model failure.
 
 ## Known Gaps
 
-- Model calls are not yet persisted as first-class observability records.
 - Structured outputs are schema-validated and reference-validated for Extract and Analyst, but report-section claim validation still happens in the Critic rather than before artifact creation.
 - Retry/repair behavior is intentionally deferred until eval baselines exist, so failures remain visible instead of being silently patched.
 

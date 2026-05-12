@@ -60,7 +60,7 @@ Acceptance criteria:
 
 Goal: make LLM usage replaceable and testable without coupling the workflow to one provider.
 
-Status: implemented for the MVP path. The project now has a provider-neutral `ModelClient`, deterministic `MockModelClient`, OpenAI-compatible HTTP adapter behind environment variables, Zod structured-output validation, reference validation for generated facts/claims, and optional model-backed Extract and Analyst agents while preserving the offline deterministic default.
+Status: implemented for the MVP path. The project now has a provider-neutral `ModelClient`, deterministic `MockModelClient`, OpenAI-compatible HTTP adapter behind environment variables, Zod structured-output validation, reference validation for generated facts/claims, project competitor allowlist validation for generated facts, first-class model call observability, and optional model-backed Extract and Analyst agents while preserving the offline deterministic default.
 
 Tasks:
 
@@ -74,13 +74,13 @@ Tasks:
 Acceptance criteria:
 
 - Tests do not require external API keys.
-- Missing API keys fail with a clear startup/runtime error.
+- Missing API keys or incomplete model-mode configuration fail with a clear startup/runtime error.
 - Real LLM agents produce schema-validated facts and claims.
 - Invalid model output is rejected and recorded as an agent failure.
+- Model calls are persisted with provider/task/status/error context and token usage when available.
 
 Remaining hardening:
 
-- Persist model request metadata and token usage into first-class observability records.
 - Add schema-level report validation that rejects report sections citing unknown claims before persistence.
 - Add model-output repair/retry policy after eval baselines exist.
 
@@ -133,10 +133,11 @@ Tasks:
 
 1. Add workflow timeline UI.
 2. Add agent run detail UI.
-3. Add sanitized tool call detail UI.
-4. Add artifact lineage view.
-5. Link Critic findings to the exact claim, fact, or report section.
-6. Add eval result page for regression review.
+3. Done for model MVP path: add first-class model call detail UI with provider, task, status, prompt trace input, output, token usage, and validation/provider errors.
+4. Add sanitized tool call detail UI.
+5. Add artifact lineage view.
+6. Link Critic findings to the exact claim, fact, or report section.
+7. Add eval result page for regression review.
 
 Acceptance criteria:
 

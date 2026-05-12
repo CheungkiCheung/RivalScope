@@ -180,6 +180,7 @@ describe("persistAnalysisExecution", () => {
             id: `db_run_${input.agentName}`
           })),
         createToolCalls: vi.fn().mockResolvedValue({ count: 1 }),
+        createModelCalls: vi.fn().mockResolvedValue({ count: 1 }),
         updateNodeStatuses: vi.fn().mockResolvedValue([])
       },
       artifact: {
@@ -243,6 +244,25 @@ describe("persistAnalysisExecution", () => {
               startedAt: "2026-05-11T00:00:00.000Z",
               finishedAt: "2026-05-11T00:00:01.000Z"
             }
+          ],
+          modelCalls: [
+            {
+              id: "model_call_temp_1",
+              provider: "mock",
+              model: "mock-fixture",
+              task: "extract_facts",
+              status: "succeeded",
+              responseFormat: "json_object",
+              input: { prompt: "facts" },
+              output: { content: "{\"facts\":[]}" },
+              usage: {
+                inputTokens: 12,
+                outputTokens: 8,
+                totalTokens: 20
+              },
+              startedAt: "2026-05-11T00:00:00.500Z",
+              finishedAt: "2026-05-11T00:00:01.500Z"
+            }
           ]
         },
         {
@@ -256,7 +276,8 @@ describe("persistAnalysisExecution", () => {
             startedAt: "2026-05-11T00:00:03.000Z",
             finishedAt: "2026-05-11T00:00:04.000Z"
           },
-          toolCalls: []
+          toolCalls: [],
+          modelCalls: []
         },
         {
           nodeId: "write",
@@ -269,7 +290,8 @@ describe("persistAnalysisExecution", () => {
             startedAt: "2026-05-11T00:00:05.000Z",
             finishedAt: "2026-05-11T00:00:06.000Z"
           },
-          toolCalls: []
+          toolCalls: [],
+          modelCalls: []
         },
         {
           nodeId: "critique",
@@ -282,7 +304,8 @@ describe("persistAnalysisExecution", () => {
             startedAt: "2026-05-11T00:00:07.000Z",
             finishedAt: "2026-05-11T00:00:08.000Z"
           },
-          toolCalls: []
+          toolCalls: [],
+          modelCalls: []
         }
       ],
       artifacts,
@@ -294,6 +317,22 @@ describe("persistAnalysisExecution", () => {
       expect.objectContaining({
         toolName: "fetch",
         status: "SUCCEEDED"
+      })
+    ]);
+    expect(repository.workflow.createModelCalls).toHaveBeenCalledWith("db_run_extract", [
+      expect.objectContaining({
+        provider: "mock",
+        model: "mock-fixture",
+        task: "extract_facts",
+        status: "SUCCEEDED",
+        responseFormat: "json_object",
+        input: { prompt: "facts" },
+        output: { content: "{\"facts\":[]}" },
+        usage: {
+          inputTokens: 12,
+          outputTokens: 8,
+          totalTokens: 20
+        }
       })
     ]);
     expect(repository.workflow.updateNodeStatuses).toHaveBeenCalledWith(
@@ -319,5 +358,162 @@ describe("persistAnalysisExecution", () => {
     expect(result.workflow.nodes.find((node) => node.id === "write")?.outputArtifactIds).toEqual([
       "db_artifact_report"
     ]);
+  });
+
+  it("persists failed workflow state without requiring downstream intelligence artifacts", async () => {
+    const workflow: Workflow = {
+      id: "workflow_project_1",
+      projectId: "project_1",
+      nodes: [
+        {
+          id: "extract",
+          type: "agent",
+          agentName: "extract",
+          dependsOn: [],
+          status: "failed",
+          inputArtifactIds: ["artifact_temp_source", "artifact_temp_requirements"],
+          outputArtifactIds: [],
+          retryCount: 1,
+          maxRetries: 1,
+          currentAgentRunId: "agent_run_temp_extract",
+          startedAt: "2026-05-11T00:00:00.000Z",
+          finishedAt: "2026-05-11T00:00:02.000Z",
+          errorMessage: "Model fact fact_1 references unknown competitor GhostWriter"
+        },
+        {
+          id: "analyze",
+          type: "agent",
+          agentName: "analyze",
+          dependsOn: ["extract"],
+          status: "blocked",
+          inputArtifactIds: [],
+          outputArtifactIds: [],
+          retryCount: 0,
+          maxRetries: 1
+        }
+      ]
+    };
+    const artifacts: Artifact[] = [
+      createArtifact(
+        "artifact_temp_source",
+        "source_chunks",
+        {
+          projectId: "project_1",
+          chunks: [
+            {
+              id: "chunk_1",
+              sourceId: "source_1",
+              ordinal: 0,
+              text: "Cursor offers individual Pro and Team plans.",
+              tokenCount: 7
+            }
+          ]
+        },
+        "2026-05-11T00:00:00.000Z"
+      ),
+      createArtifact(
+        "artifact_temp_requirements",
+        "analysis_requirements",
+        {
+          requiredDimensions: ["pricing"],
+          competitors: [{ id: "competitor_cursor", name: "Cursor" }]
+        },
+        "2026-05-11T00:00:01.000Z"
+      )
+    ];
+    const repository = {
+      workflow: {
+        createAgentRun: vi.fn().mockResolvedValue({ id: "db_run_extract" }),
+        createToolCalls: vi.fn().mockResolvedValue({ count: 0 }),
+        createModelCalls: vi.fn().mockResolvedValue({ count: 0 }),
+        updateNodeStatuses: vi.fn().mockResolvedValue([])
+      },
+      artifact: {
+        create: vi
+          .fn()
+          .mockImplementation(
+            async (input: { kind: string; value: unknown }) => ({
+              id: `db_artifact_${String(input.kind)}`,
+              kind: input.kind,
+              value: input.value
+            })
+          )
+      },
+      intelligence: {
+        createFact: vi.fn(),
+        createClaim: vi.fn(),
+        createReport: vi.fn(),
+        createReviewFindings: vi.fn()
+      }
+    };
+
+    const result = await persistAnalysisExecution({
+      projectId: "project_1",
+      competitors: [{ id: "competitor_cursor", name: "Cursor" }],
+      workflowRecord: {
+        id: "workflow_db_1",
+        nodes: [
+          { id: "db_node_extract", nodeKey: "extract" },
+          { id: "db_node_analyze", nodeKey: "analyze" }
+        ]
+      },
+      workflow,
+      agentRuns: [
+        {
+          nodeId: "extract",
+          run: {
+            id: "agent_run_temp_extract",
+            agentName: "extract",
+            status: "failed",
+            input: {},
+            errorMessage: "Model fact fact_1 references unknown competitor GhostWriter",
+            startedAt: "2026-05-11T00:00:00.000Z",
+            finishedAt: "2026-05-11T00:00:02.000Z"
+          },
+          toolCalls: [],
+          modelCalls: [
+            {
+              id: "model_call_temp_1",
+              provider: "mock",
+              task: "extract_facts",
+              status: "failed",
+              input: { prompt: "facts" },
+              errorMessage: "Model fact fact_1 references unknown competitor GhostWriter",
+              startedAt: "2026-05-11T00:00:00.500Z",
+              finishedAt: "2026-05-11T00:00:01.500Z"
+            }
+          ]
+        }
+      ],
+      artifacts,
+      repositories: repository
+    });
+
+    expect(repository.workflow.createAgentRun).toHaveBeenCalledTimes(1);
+    expect(repository.workflow.createModelCalls).toHaveBeenCalledWith("db_run_extract", [
+      expect.objectContaining({
+        provider: "mock",
+        task: "extract_facts",
+        status: "FAILED",
+        errorMessage: "Model fact fact_1 references unknown competitor GhostWriter"
+      })
+    ]);
+    expect(repository.workflow.updateNodeStatuses).toHaveBeenCalledWith(
+      "workflow_db_1",
+      expect.arrayContaining([
+        expect.objectContaining({
+          nodeKey: "extract",
+          status: "FAILED",
+          currentAgentRunId: "db_run_extract"
+        }),
+        expect.objectContaining({
+          nodeKey: "analyze",
+          status: "BLOCKED"
+        })
+      ])
+    );
+    expect(repository.intelligence.createFact).not.toHaveBeenCalled();
+    expect(repository.intelligence.createReport).not.toHaveBeenCalled();
+    expect(result.report).toBeUndefined();
   });
 });

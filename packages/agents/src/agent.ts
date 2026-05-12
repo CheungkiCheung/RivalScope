@@ -1,4 +1,13 @@
 import type { z } from "zod";
+import {
+  getModelTraceInput,
+  getModelTraceOutput,
+  type ModelCallRecord,
+  type ModelCallRecordInput,
+  type ModelClient,
+  type ModelGenerateInput,
+  type ModelGenerateOutput
+} from "./model-client";
 
 export type AgentRunStatus = "running" | "succeeded" | "failed";
 export type ToolCallStatus = "succeeded" | "failed";
@@ -39,7 +48,13 @@ export interface ToolContext {
 
 export interface AgentContext extends ToolContext {
   callTool<I, O>(tool: Tool<I, O>, input: I): Promise<O>;
+  callModel(
+    model: ModelClient,
+    input: ModelGenerateInput
+  ): Promise<ModelGenerateOutput>;
   getToolCalls(): ToolCallRecord[];
+  getModelCalls(): ModelCallRecord[];
+  recordModelCall(input: ModelCallRecordInput): void;
 }
 
 export interface Agent<I, O> {
@@ -54,6 +69,7 @@ export interface AgentExecutionResult<O> {
   run: AgentRunRecord;
   output: O;
   toolCalls: ToolCallRecord[];
+  modelCalls: ModelCallRecord[];
 }
 
 export interface RunAgentOptions {
@@ -80,10 +96,56 @@ export function createTool<I, O>(input: CreateToolInput<I, O>): Tool<I, O> {
 
 export function createAgentRunContext(): AgentContext {
   const toolCalls: ToolCallRecord[] = [];
+  const modelCalls: ModelCallRecord[] = [];
 
   const context: AgentContext = {
     now: () => new Date().toISOString(),
     getToolCalls: () => toolCalls.map((call) => ({ ...call })),
+    getModelCalls: () => modelCalls.map((call) => ({ ...call })),
+    recordModelCall: (input: ModelCallRecordInput): void => {
+      modelCalls.push({
+        id: createId("model_call"),
+        ...input
+      });
+    },
+    callModel: async (
+      model: ModelClient,
+      input: ModelGenerateInput
+    ): Promise<ModelGenerateOutput> => {
+      const startedAt = context.now();
+
+      try {
+        const output = await model.generate(input);
+        context.recordModelCall({
+          provider: model.name,
+          ...(model.model ? { model: model.model } : {}),
+          task: input.task,
+          status: "succeeded",
+          ...(input.responseFormat ? { responseFormat: input.responseFormat } : {}),
+          input: getModelTraceInput(input),
+          output: getModelTraceOutput(output),
+          ...(output.usage ? { usage: output.usage } : {}),
+          startedAt,
+          finishedAt: context.now()
+        });
+
+        return output;
+      } catch (error) {
+        context.recordModelCall({
+          provider: model.name,
+          ...(model.model ? { model: model.model } : {}),
+          task: input.task,
+          status: "failed",
+          ...(input.responseFormat ? { responseFormat: input.responseFormat } : {}),
+          input: getModelTraceInput(input),
+          errorMessage: getErrorMessage(error),
+          startedAt,
+          finishedAt: context.now()
+        });
+
+        throw error;
+      }
+    },
     callTool: async <I, O>(tool: Tool<I, O>, input: I): Promise<O> => {
       const parsedInput = tool.inputSchema.parse(input);
       const startedAt = context.now();
@@ -149,7 +211,8 @@ export async function runAgent<I, O>(
     return {
       run: finishedRun,
       output,
-      toolCalls: context.getToolCalls()
+      toolCalls: context.getToolCalls(),
+      modelCalls: context.getModelCalls()
     };
   } catch (error) {
     const failedRun: AgentRunRecord = {
@@ -161,7 +224,8 @@ export async function runAgent<I, O>(
 
     throw Object.assign(new Error(failedRun.errorMessage), {
       run: failedRun,
-      toolCalls: context.getToolCalls()
+      toolCalls: context.getToolCalls(),
+      modelCalls: context.getModelCalls()
     });
   }
 }

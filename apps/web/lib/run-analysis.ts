@@ -44,11 +44,7 @@ export async function runAnalysis(projectId: string) {
   });
   const requirementsArtifact = artifacts.put({
     kind: "analysis_requirements",
-    value: {
-      requiredDimensions: project.analysisDimensions
-        .filter((dimension) => dimension.required)
-        .map((dimension) => dimension.key)
-    }
+    value: buildAnalysisRequirements(project)
   });
   const workflow = createWorkflow({
     id: `workflow_${projectId}`,
@@ -110,6 +106,21 @@ export async function runAnalysis(projectId: string) {
     workflowRecord,
     agentRuns: result.agentRuns,
     artifacts: persisted.artifacts
+  };
+}
+
+export function buildAnalysisRequirements(project: {
+  competitors: Array<{ id: string; name: string }>;
+  analysisDimensions: Array<{ key: string; required: boolean }>;
+}) {
+  return {
+    competitors: project.competitors.map((competitor) => ({
+      id: competitor.id,
+      name: competitor.name
+    })),
+    requiredDimensions: project.analysisDimensions
+      .filter((dimension) => dimension.required)
+      .map((dimension) => dimension.key)
   };
 }
 

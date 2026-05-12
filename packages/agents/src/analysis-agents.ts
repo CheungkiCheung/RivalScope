@@ -18,6 +18,11 @@ export interface AnalysisWorkflowAgentOptions {
   model?: ModelClient;
 }
 
+interface AnalysisRequirementCompetitor {
+  id?: string;
+  name: string;
+}
+
 export interface ReviewFinding {
   id: string;
   severity: "low" | "medium" | "high";
@@ -50,25 +55,26 @@ export function createExtractAgent(
     role: "Extracts structured facts from source chunks.",
     inputSchema: workflowAgentInputSchema,
     outputSchema: workflowAgentOutputSchema,
-    run: async (input) => {
+    run: async (input, context) => {
       const chunks = getLatestArtifactValue<{ chunks: SourceChunk[] }>(
         input.artifacts,
         "source_chunks"
       ).chunks;
       const requirements = getOptionalLatestArtifactValue<{
-        competitors?: Array<{ name: string }>;
+        competitors?: AnalysisRequirementCompetitor[];
         requiredDimensions?: string[];
       }>(input.artifacts, "analysis_requirements");
 
       if (options.model) {
-        const output = await generateStructuredObject({
+        const facts = await generateStructuredObject({
           model: options.model,
+          recorder: context,
           task: "extract_facts",
           system: [
             "You extract competitive-intelligence facts from source chunks.",
             "Return JSON only with a facts array.",
             "Each fact must cite at least one sourceChunkId from the provided chunks.",
-            "Use competitorId values from the provided competitors when possible."
+            "Use competitorId values exactly from the provided competitors. Prefer competitor.id when present. Never invent competitors."
           ].join(" "),
           messages: [
             {
@@ -81,18 +87,21 @@ export function createExtractAgent(
               })
             }
           ],
-          schema: modelFactsSchema
+          schema: modelFactsSchema,
+          transform: (output) =>
+            normalizeModelFacts({
+              projectId: input.projectId,
+              chunks,
+              competitors: requirements?.competitors ?? [],
+              facts: output.facts
+            })
         });
 
         return {
           kind: "facts",
           value: {
             projectId: input.projectId,
-            facts: normalizeModelFacts({
-              projectId: input.projectId,
-              chunks,
-              facts: output.facts
-            })
+            facts
           }
         };
       }
@@ -123,7 +132,7 @@ export function createAnalystAgent(
     role: "Turns structured facts into evidence-backed claims.",
     inputSchema: workflowAgentInputSchema,
     outputSchema: workflowAgentOutputSchema,
-    run: async (input) => {
+    run: async (input, context) => {
       const facts = getLatestArtifactValue<{ facts: Fact[] }>(
         input.artifacts,
         "facts"
@@ -133,8 +142,9 @@ export function createAnalystAgent(
         const requirements = getOptionalLatestArtifactValue<{
           requiredDimensions?: string[];
         }>(input.artifacts, "analysis_requirements");
-        const output = await generateStructuredObject({
+        const claims = await generateStructuredObject({
           model: options.model,
+          recorder: context,
           task: "synthesize_claims",
           system: [
             "You synthesize evidence-backed competitive-intelligence claims.",
@@ -152,18 +162,20 @@ export function createAnalystAgent(
               })
             }
           ],
-          schema: modelClaimsSchema
+          schema: modelClaimsSchema,
+          transform: (output) =>
+            normalizeModelClaims({
+              projectId: input.projectId,
+              facts,
+              claims: output.claims
+            })
         });
 
         return {
           kind: "claims",
           value: {
             projectId: input.projectId,
-            claims: normalizeModelClaims({
-              projectId: input.projectId,
-              facts,
-              claims: output.claims
-            })
+            claims
           }
         };
       }
@@ -216,12 +228,20 @@ type ModelClaimCandidate = z.infer<typeof modelClaimsSchema>["claims"][number];
 function normalizeModelFacts(input: {
   projectId: string;
   chunks: SourceChunk[];
+  competitors: AnalysisRequirementCompetitor[];
   facts: ModelFactCandidate[];
 }): Fact[] {
   const chunkIds = new Set(input.chunks.map((chunk) => chunk.id));
+  const competitorByKey = buildCompetitorLookup(input.competitors);
 
   return input.facts.map((fact, index) => {
     const id = `fact_${index + 1}`;
+    const competitorId = resolveModelCompetitorId({
+      factId: id,
+      candidate: fact.competitorId,
+      competitors: input.competitors,
+      competitorByKey
+    });
 
     for (const chunkId of fact.sourceChunkIds) {
       if (!chunkIds.has(chunkId)) {
@@ -232,13 +252,50 @@ function normalizeModelFacts(input: {
     return {
       id,
       projectId: input.projectId,
-      competitorId: fact.competitorId,
+      competitorId,
       dimension: fact.dimension,
       statement: fact.statement,
       sourceChunkIds: fact.sourceChunkIds,
       confidence: fact.confidence
     };
   });
+}
+
+function buildCompetitorLookup(
+  competitors: AnalysisRequirementCompetitor[]
+): Map<string, AnalysisRequirementCompetitor> {
+  const lookup = new Map<string, AnalysisRequirementCompetitor>();
+
+  for (const competitor of competitors) {
+    if (competitor.id) {
+      lookup.set(normalizeLookupKey(competitor.id), competitor);
+    }
+
+    lookup.set(normalizeLookupKey(competitor.name), competitor);
+  }
+
+  return lookup;
+}
+
+function resolveModelCompetitorId(input: {
+  factId: string;
+  candidate: string;
+  competitors: AnalysisRequirementCompetitor[];
+  competitorByKey: Map<string, AnalysisRequirementCompetitor>;
+}): string {
+  if (input.competitors.length === 0) {
+    return input.candidate;
+  }
+
+  const competitor = input.competitorByKey.get(normalizeLookupKey(input.candidate));
+
+  if (!competitor) {
+    throw new Error(
+      `Model fact ${input.factId} references unknown competitor ${input.candidate}`
+    );
+  }
+
+  return competitor.id ?? competitor.name;
 }
 
 function normalizeModelClaims(input: {
@@ -409,17 +466,34 @@ export function createCriticAgent(): WorkflowAgent {
 
 function inferCompetitorId(
   chunk: SourceChunk,
-  competitors: Array<{ name: string }>
+  competitors: AnalysisRequirementCompetitor[]
 ): string {
   const text = chunk.text.toLowerCase();
+  const sourceId = chunk.sourceId.toLowerCase();
 
   for (const competitor of competitors) {
-    if (text.includes(competitor.name.toLowerCase())) {
-      return competitor.name;
+    const normalizedName = competitor.name.toLowerCase();
+    const normalizedSourceName = competitor.name
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "_")
+      .replace(/^_+|_+$/g, "");
+
+    if (text.includes(normalizedName) || sourceId.includes(normalizedSourceName)) {
+      return competitor.id ?? competitor.name;
     }
   }
 
+  if (competitors.length > 0) {
+    throw new Error(
+      `Could not assign chunk ${chunk.id} to a configured competitor`
+    );
+  }
+
   return chunk.sourceId;
+}
+
+function normalizeLookupKey(value: string): string {
+  return value.trim().toLowerCase();
 }
 
 function inferDimension(text: string): string {

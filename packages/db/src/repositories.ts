@@ -8,6 +8,7 @@ import type {
   ReportStatus,
   SourceKind,
   ToolCallStatus,
+  ModelCallStatus,
   WorkflowNodeStatus,
   WorkflowNodeType
 } from "@prisma/client";
@@ -172,7 +173,7 @@ export class ProjectRepository {
               include: {
                 agentRuns: {
                   orderBy: { startedAt: "desc" },
-                  include: { toolCalls: true }
+                  include: { toolCalls: true, modelCalls: true }
                 }
               }
             }
@@ -275,6 +276,19 @@ export class WorkflowRepository {
       startedAt: Date;
       finishedAt: Date;
     }>;
+    modelCalls?: Array<{
+      provider: string;
+      model?: string;
+      task: string;
+      status: ModelCallStatus;
+      responseFormat?: string;
+      input: Prisma.InputJsonValue;
+      output?: Prisma.InputJsonValue;
+      usage?: Prisma.InputJsonValue;
+      errorMessage?: string;
+      startedAt: Date;
+      finishedAt: Date;
+    }>;
   }) {
     const data: Prisma.AgentRunUncheckedCreateInput = {
       workflowNodeId: input.workflowNodeId,
@@ -284,6 +298,9 @@ export class WorkflowRepository {
       startedAt: input.startedAt,
       toolCalls: {
         create: input.toolCalls ?? []
+      },
+      modelCalls: {
+        create: input.modelCalls ?? []
       }
     };
 
@@ -301,7 +318,7 @@ export class WorkflowRepository {
 
     return this.db.agentRun.create({
       data,
-      include: { toolCalls: true }
+      include: { toolCalls: true, modelCalls: true }
     });
   }
 
@@ -418,6 +435,48 @@ export class WorkflowRepository {
           : {}),
         startedAt: toolCall.startedAt,
         finishedAt: toolCall.finishedAt
+      }))
+    });
+  }
+
+  async createModelCalls(
+    agentRunId: string,
+    modelCalls: Array<{
+      provider: string;
+      model?: string;
+      task: string;
+      status: ModelCallStatus;
+      responseFormat?: string;
+      input: Prisma.InputJsonValue;
+      output?: Prisma.InputJsonValue;
+      usage?: Prisma.InputJsonValue;
+      errorMessage?: string;
+      startedAt: Date;
+      finishedAt: Date;
+    }>
+  ) {
+    if (modelCalls.length === 0) {
+      return { count: 0 };
+    }
+
+    return this.db.modelCall.createMany({
+      data: modelCalls.map((modelCall) => ({
+        agentRunId,
+        provider: modelCall.provider,
+        ...(modelCall.model !== undefined ? { model: modelCall.model } : {}),
+        task: modelCall.task,
+        status: modelCall.status,
+        ...(modelCall.responseFormat !== undefined
+          ? { responseFormat: modelCall.responseFormat }
+          : {}),
+        input: modelCall.input,
+        ...(modelCall.output !== undefined ? { output: modelCall.output } : {}),
+        ...(modelCall.usage !== undefined ? { usage: modelCall.usage } : {}),
+        ...(modelCall.errorMessage !== undefined
+          ? { errorMessage: modelCall.errorMessage }
+          : {}),
+        startedAt: modelCall.startedAt,
+        finishedAt: modelCall.finishedAt
       }))
     });
   }

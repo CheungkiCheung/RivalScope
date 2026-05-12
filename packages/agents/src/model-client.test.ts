@@ -82,6 +82,36 @@ describe("model client", () => {
     expect(result.claims[0]?.claim).toBe("Cursor has paid plans.");
   });
 
+  it("bounds prompt and response content in persisted trace payloads", async () => {
+    const model = new MockModelClient([
+      {
+        content: JSON.stringify({
+          summary: "x".repeat(2_000)
+        })
+      }
+    ]);
+    const records: unknown[] = [];
+
+    await generateStructuredObject({
+      model,
+      recorder: {
+        now: () => "2026-05-11T00:00:00.000Z",
+        recordModelCall: (record) => records.push(record)
+      },
+      task: "summarize",
+      system: "s".repeat(2_000),
+      messages: [{ role: "user", content: "m".repeat(2_000) }],
+      schema: z.object({ summary: z.string() })
+    });
+
+    const serialized = JSON.stringify(records[0]);
+
+    expect(serialized).not.toContain("s".repeat(1_500));
+    expect(serialized).not.toContain("m".repeat(1_500));
+    expect(serialized).not.toContain("x".repeat(1_500));
+    expect(serialized).toContain("[truncated");
+  });
+
   it("times out slow OpenAI-compatible requests", async () => {
     const model = createOpenAICompatibleModelClient({
       apiKey: "test-key",

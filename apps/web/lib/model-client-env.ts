@@ -7,8 +7,20 @@ import {
 export function createAnalysisAgentOptionsFromEnv(
   env: Record<string, string | undefined>
 ): AnalysisWorkflowAgentOptions {
-  if (env.RIVALSCOPE_ANALYSIS_AGENT_MODE !== "model") {
+  const mode = env.RIVALSCOPE_ANALYSIS_AGENT_MODE?.trim().toLowerCase() || "mock";
+
+  if (mode === "mock" || mode === "deterministic" || mode === "offline") {
     return {};
+  }
+
+  if (mode !== "model") {
+    throw new Error(`Unsupported analysis agent mode ${mode}`);
+  }
+
+  if (env.RIVALSCOPE_MODEL_PROVIDER?.trim().toLowerCase() !== "openai-compatible") {
+    throw new Error(
+      "RIVALSCOPE_MODEL_PROVIDER must be openai-compatible when RIVALSCOPE_ANALYSIS_AGENT_MODE is model"
+    );
   }
 
   return {

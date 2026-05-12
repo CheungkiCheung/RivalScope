@@ -43,6 +43,25 @@ export default async function ProjectPage({ params }: ProjectPageProps) {
       ...toolCall
     }))
   );
+  const workflowModelCalls = agentRuns.flatMap((run) =>
+    run.modelCalls.map((modelCall) => ({
+      nodeId: run.workflowNodeId,
+      agentName: run.agentName,
+      ...modelCall
+    }))
+  );
+  const totalModelTokens = workflowModelCalls.reduce((total, modelCall) => {
+    if (
+      typeof modelCall.usage === "object" &&
+      modelCall.usage !== null &&
+      "totalTokens" in modelCall.usage &&
+      typeof modelCall.usage.totalTokens === "number"
+    ) {
+      return total + modelCall.usage.totalTokens;
+    }
+
+    return total;
+  }, 0);
   const latestFindings = latestReport?.reviewFindings ?? [];
   const reportSections = latestReport?.sections ?? [];
   const allClaims = reportSections.flatMap((section) =>
@@ -84,6 +103,10 @@ export default async function ProjectPage({ params }: ProjectPageProps) {
         <div className="metric">
           <span className="metric-label">Findings</span>
           <strong>{latestFindings.length}</strong>
+        </div>
+        <div className="metric">
+          <span className="metric-label">Model Calls</span>
+          <strong>{workflowModelCalls.length}</strong>
         </div>
       </section>
 
@@ -169,6 +192,7 @@ export default async function ProjectPage({ params }: ProjectPageProps) {
                             {new Date(latestRun.startedAt).toLocaleTimeString("zh-CN")}
                           </span>
                           <span className="muted">tool calls {latestRun.toolCalls.length}</span>
+                          <span className="muted">model calls {latestRun.modelCalls.length}</span>
                         </div>
                       ) : (
                         <span className="muted">No agent run recorded.</span>
@@ -203,6 +227,54 @@ export default async function ProjectPage({ params }: ProjectPageProps) {
                           input: toolCall.input,
                           output: toolCall.output ?? null,
                           errorMessage: toolCall.errorMessage ?? null
+                        },
+                        null,
+                        2
+                      )}
+                    </pre>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+
+          <section className="card">
+            <h3>Model calls</h3>
+            {workflowModelCalls.length === 0 ? (
+              <p className="muted">No model calls recorded yet.</p>
+            ) : (
+              <div className="list">
+                {totalModelTokens > 0 ? (
+                  <div className="trace-summary">
+                    <span className="metric-label">Total tokens</span>
+                    <strong>{totalModelTokens}</strong>
+                  </div>
+                ) : null}
+                {workflowModelCalls.map((modelCall) => (
+                  <div className="item" key={modelCall.id}>
+                    <div className="item-head">
+                      <strong>{modelCall.task}</strong>
+                      <span className={`status ${modelCall.status === "SUCCEEDED" ? "ok" : "bad"}`}>
+                        {modelCall.status}
+                      </span>
+                    </div>
+                    <span className="muted">
+                      {modelCall.agentName} · {modelCall.provider}
+                      {modelCall.model ? `/${modelCall.model}` : ""} · {modelCall.nodeId}
+                    </span>
+                    <div className="pill-row">
+                      {modelCall.responseFormat ? (
+                        <span className="pill">{modelCall.responseFormat}</span>
+                      ) : null}
+                      {renderTokenPill(modelCall.usage)}
+                    </div>
+                    <pre className="pre compact">
+                      {JSON.stringify(
+                        {
+                          input: modelCall.input,
+                          output: modelCall.output ?? null,
+                          usage: modelCall.usage ?? null,
+                          errorMessage: modelCall.errorMessage ?? null
                         },
                         null,
                         2
@@ -290,6 +362,19 @@ export default async function ProjectPage({ params }: ProjectPageProps) {
       </div>
     </main>
   );
+}
+
+function renderTokenPill(usage: unknown) {
+  if (
+    typeof usage === "object" &&
+    usage !== null &&
+    "totalTokens" in usage &&
+    typeof usage.totalTokens === "number"
+  ) {
+    return <span className="pill">{usage.totalTokens} tokens</span>;
+  }
+
+  return null;
 }
 
 function statusClass(status: string) {

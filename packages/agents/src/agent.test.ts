@@ -6,6 +6,7 @@ import {
   runAgent,
   type Agent
 } from "./agent";
+import { MockModelClient } from "./model-client";
 
 const inputSchema = z.object({ topic: z.string() });
 const outputSchema = z.object({ summary: z.string() });
@@ -62,6 +63,100 @@ describe("agent execution", () => {
     expect(result.toolCalls).toHaveLength(1);
     expect(result.toolCalls[0]?.toolName).toBe("uppercase");
     expect(result.toolCalls[0]?.status).toBe("succeeded");
+  });
+
+  it("records model calls through the agent context", async () => {
+    const model = new MockModelClient([
+      {
+        content: "model summary",
+        usage: {
+          inputTokens: 4,
+          outputTokens: 2,
+          totalTokens: 6
+        }
+      }
+    ]);
+    const agent: Agent<
+      z.infer<typeof inputSchema>,
+      z.infer<typeof outputSchema>
+    > = {
+      name: "model-user",
+      role: "Uses a model.",
+      inputSchema,
+      outputSchema,
+      run: async (input, context) => {
+        const output = await context.callModel(model, {
+          task: "summarize_topic",
+          system: "Summarize the topic.",
+          messages: [{ role: "user", content: input.topic }],
+          responseFormat: "text"
+        });
+
+        return { summary: output.content };
+      }
+    };
+
+    const result = await runAgent(agent, { topic: "Cursor" });
+
+    expect(result.output.summary).toBe("model summary");
+    expect(result.modelCalls).toHaveLength(1);
+    expect(result.modelCalls[0]).toMatchObject({
+      provider: "mock",
+      task: "summarize_topic",
+      status: "succeeded",
+      responseFormat: "text",
+      input: {
+        system: "Summarize the topic.",
+        messages: [{ role: "user", content: "Cursor" }]
+      },
+      output: {
+        content: "model summary"
+      },
+      usage: {
+        inputTokens: 4,
+        outputTokens: 2,
+        totalTokens: 6
+      }
+    });
+  });
+
+  it("preserves failed model calls when the agent fails", async () => {
+    const model = {
+      name: "broken-provider",
+      generate: async () => {
+        throw new Error("provider unavailable");
+      }
+    };
+    const agent: Agent<
+      z.infer<typeof inputSchema>,
+      z.infer<typeof outputSchema>
+    > = {
+      name: "model-user",
+      role: "Uses a model.",
+      inputSchema,
+      outputSchema,
+      run: async (input, context) => {
+        await context.callModel(model, {
+          task: "summarize_topic",
+          system: "Summarize the topic.",
+          messages: [{ role: "user", content: input.topic }],
+          responseFormat: "text"
+        });
+
+        return { summary: "unreachable" };
+      }
+    };
+
+    await expect(runAgent(agent, { topic: "Cursor" })).rejects.toMatchObject({
+      modelCalls: [
+        expect.objectContaining({
+          provider: "broken-provider",
+          task: "summarize_topic",
+          status: "failed",
+          errorMessage: "provider unavailable"
+        })
+      ]
+    });
   });
 
   it("fails when an agent returns output that does not match its schema", async () => {

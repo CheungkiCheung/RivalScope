@@ -3,15 +3,13 @@ import { createWorkflow } from "@rivalscope/core";
 import {
   createAnalysisWorkflowAgents,
   createAnalystAgent,
-  createExtractAgent,
-  createCriticAgent
+  createCriticAgent,
+  createExtractAgent
 } from "./analysis-agents";
-import { InMemoryArtifactStore } from "./artifacts";
-import {
-  runWorkflow
-} from "./workflow-runner";
 import { runAgent } from "./agent";
+import { InMemoryArtifactStore } from "./artifacts";
 import { MockModelClient } from "./model-client";
+import { runWorkflow } from "./workflow-runner";
 
 describe("workflow runner", () => {
   it("executes the extract -> analyze -> write -> critique chain with artifacts", async () => {
@@ -38,55 +36,14 @@ describe("workflow runner", () => {
         ]
       }
     });
-
     const workflow = createWorkflow({
       id: "workflow_1",
       projectId: "project_1",
       nodes: [
-        {
-          id: "extract",
-          type: "agent",
-          agentName: "extract",
-          dependsOn: [],
-          status: "pending",
-          inputArtifactIds: [sourceArtifact.id],
-          outputArtifactIds: [],
-          retryCount: 0,
-          maxRetries: 1
-        },
-        {
-          id: "analyze",
-          type: "agent",
-          agentName: "analyze",
-          dependsOn: ["extract"],
-          status: "pending",
-          inputArtifactIds: [],
-          outputArtifactIds: [],
-          retryCount: 0,
-          maxRetries: 1
-        },
-        {
-          id: "write",
-          type: "agent",
-          agentName: "write",
-          dependsOn: ["analyze"],
-          status: "pending",
-          inputArtifactIds: [],
-          outputArtifactIds: [],
-          retryCount: 0,
-          maxRetries: 1
-        },
-        {
-          id: "critique",
-          type: "agent",
-          agentName: "critique",
-          dependsOn: ["write"],
-          status: "pending",
-          inputArtifactIds: [],
-          outputArtifactIds: [],
-          retryCount: 0,
-          maxRetries: 1
-        }
+        createWorkflowNode("extract", "extract", [], [sourceArtifact.id]),
+        createWorkflowNode("analyze", "analyze", ["extract"]),
+        createWorkflowNode("write", "write", ["analyze"]),
+        createWorkflowNode("critique", "critique", ["write"])
       ]
     });
 
@@ -99,18 +56,12 @@ describe("workflow runner", () => {
     expect(result.workflow.nodes.every((node) => node.status === "succeeded")).toBe(
       true
     );
-    expect(result.agentRuns).toHaveLength(4);
     expect(result.agentRuns.map((run) => run.nodeId)).toEqual([
       "extract",
       "analyze",
       "write",
       "critique"
     ]);
-
-    const critiqueNode = result.workflow.nodes.find(
-      (node) => node.id === "critique"
-    );
-    expect(critiqueNode?.currentAgentRunId).toBe(result.agentRuns[3]?.run.id);
     expect(
       result.agentRuns.map((agentRun) => ({
         nodeId: agentRun.nodeId,
@@ -123,6 +74,9 @@ describe("workflow runner", () => {
       }))
     );
 
+    const critiqueNode = result.workflow.nodes.find(
+      (node) => node.id === "critique"
+    );
     const critiqueArtifact = artifacts.get(critiqueNode?.outputArtifactIds[0] ?? "");
 
     expect(critiqueArtifact?.kind).toBe("review_findings");
@@ -139,28 +93,8 @@ describe("workflow runner", () => {
       id: "workflow_1",
       projectId: "project_1",
       nodes: [
-        {
-          id: "extract",
-          type: "agent",
-          agentName: "missing_agent",
-          dependsOn: [],
-          status: "pending",
-          inputArtifactIds: [],
-          outputArtifactIds: [],
-          retryCount: 0,
-          maxRetries: 1
-        },
-        {
-          id: "analyze",
-          type: "agent",
-          agentName: "analyze",
-          dependsOn: ["extract"],
-          status: "pending",
-          inputArtifactIds: [],
-          outputArtifactIds: [],
-          retryCount: 0,
-          maxRetries: 1
-        }
+        createWorkflowNode("extract", "missing_agent", []),
+        createWorkflowNode("analyze", "analyze", ["extract"])
       ]
     });
 
@@ -186,35 +120,19 @@ describe("extract agent", () => {
     const result = await runAgent(extract, {
       projectId: "project_1",
       artifacts: [
-        {
-          id: "artifact_requirements",
-          kind: "analysis_requirements",
-          createdAt: "2026-05-11T00:00:00.000Z",
-          value: {
-            competitors: [
-              { name: "Cursor" },
-              { name: "Codex" },
-              { name: "Trae" }
-            ],
-            requiredDimensions: ["pricing", "positioning"]
+        createRequirementsArtifact({
+          competitors: [{ name: "Cursor" }, { name: "Codex" }, { name: "Trae" }],
+          requiredDimensions: ["pricing", "positioning"]
+        }),
+        createSourceChunksArtifact([
+          {
+            id: "chunk_trae",
+            sourceId: "manual_notes",
+            ordinal: 0,
+            text: "Trae emphasizes AI-assisted development workflows for product engineering teams.",
+            tokenCount: 8
           }
-        },
-        {
-          id: "artifact_sources",
-          kind: "source_chunks",
-          createdAt: "2026-05-11T00:00:01.000Z",
-          value: {
-            chunks: [
-              {
-                id: "chunk_trae",
-                sourceId: "manual_notes",
-                ordinal: 0,
-                text: "Trae emphasizes AI-assisted development workflows for product engineering teams.",
-                tokenCount: 8
-              }
-            ]
-          }
-        }
+        ])
       ]
     });
 
@@ -226,6 +144,32 @@ describe("extract agent", () => {
         }
       ]
     });
+  });
+
+  it("fails before artifact creation when deterministic extraction cannot map a chunk to an allowed competitor", async () => {
+    const extract = createExtractAgent();
+
+    await expect(
+      runAgent(extract, {
+        projectId: "project_1",
+        artifacts: [
+          createRequirementsArtifact({
+            competitors: [{ id: "competitor_cursor", name: "Cursor" }]
+          }),
+          createSourceChunksArtifact([
+            {
+              id: "chunk_unknown",
+              sourceId: "source_unknown",
+              ordinal: 0,
+              text: "This source discusses pricing without naming the vendor.",
+              tokenCount: 8
+            }
+          ])
+        ]
+      })
+    ).rejects.toThrow(
+      "Could not assign chunk chunk_unknown to a configured competitor"
+    );
   });
 
   it("can use a model client for schema-validated fact extraction", async () => {
@@ -251,31 +195,19 @@ describe("extract agent", () => {
     const result = await runAgent(extract, {
       projectId: "project_1",
       artifacts: [
-        {
-          id: "artifact_requirements",
-          kind: "analysis_requirements",
-          createdAt: "2026-05-11T00:00:00.000Z",
-          value: {
-            competitors: [{ name: "Cursor" }],
-            requiredDimensions: ["pricing"]
+        createRequirementsArtifact({
+          competitors: [{ id: "competitor_cursor", name: "Cursor" }],
+          requiredDimensions: ["pricing"]
+        }),
+        createSourceChunksArtifact([
+          {
+            id: "chunk_cursor_pricing",
+            sourceId: "source_cursor",
+            ordinal: 0,
+            text: "Cursor offers paid Pro and Team plans.",
+            tokenCount: 7
           }
-        },
-        {
-          id: "artifact_sources",
-          kind: "source_chunks",
-          createdAt: "2026-05-11T00:00:01.000Z",
-          value: {
-            chunks: [
-              {
-                id: "chunk_cursor_pricing",
-                sourceId: "source_cursor",
-                ordinal: 0,
-                text: "Cursor offers paid Pro and Team plans.",
-                tokenCount: 7
-              }
-            ]
-          }
-        }
+        ])
       ]
     });
 
@@ -284,7 +216,7 @@ describe("extract agent", () => {
         {
           id: "fact_1",
           projectId: "project_1",
-          competitorId: "Cursor",
+          competitorId: "competitor_cursor",
           sourceChunkIds: ["chunk_cursor_pricing"]
         }
       ]
@@ -292,6 +224,66 @@ describe("extract agent", () => {
     expect(model.calls[0]).toMatchObject({
       task: "extract_facts",
       responseFormat: "json_object"
+    });
+    expect(result.modelCalls).toHaveLength(1);
+    expect(result.modelCalls[0]).toMatchObject({
+      provider: "mock",
+      task: "extract_facts",
+      status: "succeeded"
+    });
+    expect(result.modelCalls[0]?.usage).toBeUndefined();
+  });
+
+  it("rejects model facts assigned to competitors outside the project allowlist", async () => {
+    const extract = createExtractAgent({
+      model: new MockModelClient([
+        {
+          content: JSON.stringify({
+            facts: [
+              {
+                competitorId: "GhostWriter",
+                dimension: "pricing",
+                statement: "GhostWriter offers a free plan.",
+                sourceChunkIds: ["chunk_cursor_pricing"],
+                confidence: 0.9
+              }
+            ]
+          })
+        }
+      ])
+    });
+    const execution = runAgent(extract, {
+      projectId: "project_1",
+      artifacts: [
+        createRequirementsArtifact({
+          competitors: [{ id: "competitor_cursor", name: "Cursor" }],
+          requiredDimensions: ["pricing"]
+        }),
+        createSourceChunksArtifact([
+          {
+            id: "chunk_cursor_pricing",
+            sourceId: "source_cursor",
+            ordinal: 0,
+            text: "Cursor offers paid plans.",
+            tokenCount: 4
+          }
+        ])
+      ]
+    });
+
+    await expect(execution).rejects.toThrow(
+      "Model fact fact_1 references unknown competitor GhostWriter"
+    );
+    await expect(execution).rejects.toMatchObject({
+      modelCalls: [
+        expect.objectContaining({
+          provider: "mock",
+          task: "extract_facts",
+          status: "failed",
+          errorMessage:
+            "Model fact fact_1 references unknown competitor GhostWriter"
+        })
+      ]
     });
   });
 
@@ -313,30 +305,154 @@ describe("extract agent", () => {
         }
       ])
     });
-
-    await expect(
-      runAgent(extract, {
-        projectId: "project_1",
-        artifacts: [
+    const execution = runAgent(extract, {
+      projectId: "project_1",
+      artifacts: [
+        createRequirementsArtifact({
+          competitors: [{ name: "Cursor" }]
+        }),
+        createSourceChunksArtifact([
           {
-            id: "artifact_sources",
-            kind: "source_chunks",
-            createdAt: "2026-05-11T00:00:01.000Z",
-            value: {
-              chunks: [
-                {
-                  id: "chunk_cursor_pricing",
-                  sourceId: "source_cursor",
-                  ordinal: 0,
-                  text: "Cursor offers paid plans.",
-                  tokenCount: 4
-                }
-              ]
-            }
+            id: "chunk_cursor_pricing",
+            sourceId: "source_cursor",
+            ordinal: 0,
+            text: "Cursor offers paid plans.",
+            tokenCount: 4
+          }
+        ])
+      ]
+    });
+
+    await expect(execution).rejects.toThrow(
+      "Model fact fact_1 cites unknown source chunk chunk_missing"
+    );
+    await expect(execution).rejects.toMatchObject({
+      modelCalls: [
+        expect.objectContaining({
+          provider: "mock",
+          task: "extract_facts",
+          status: "failed",
+          errorMessage:
+            "Model fact fact_1 cites unknown source chunk chunk_missing"
+        })
+      ]
+    });
+  });
+
+  it("keeps model calls on failed workflow runs", async () => {
+    const artifacts = new InMemoryArtifactStore();
+    const sourceArtifact = artifacts.put({
+      kind: "source_chunks",
+      value: {
+        projectId: "project_1",
+        chunks: [
+          {
+            id: "chunk_cursor_pricing",
+            sourceId: "source_cursor",
+            ordinal: 0,
+            text: "Cursor offers paid plans.",
+            tokenCount: 4
           }
         ]
-      })
-    ).rejects.toThrow("Model fact fact_1 cites unknown source chunk chunk_missing");
+      }
+    });
+    const requirementsArtifact = artifacts.put({
+      kind: "analysis_requirements",
+      value: {
+        competitors: [{ id: "competitor_cursor", name: "Cursor" }],
+        requiredDimensions: ["pricing"]
+      }
+    });
+    const workflow = createWorkflow({
+      id: "workflow_1",
+      projectId: "project_1",
+      nodes: [
+        createWorkflowNode("extract", "extract", [], [
+          sourceArtifact.id,
+          requirementsArtifact.id
+        ]),
+        createWorkflowNode("analyze", "analyze", ["extract"])
+      ]
+    });
+
+    const result = await runWorkflow({
+      workflow,
+      artifacts,
+      agents: {
+        extract: createExtractAgent({
+          model: new MockModelClient([{ content: "not json" }])
+        })
+      }
+    });
+
+    expect(result.workflow.nodes.find((node) => node.id === "extract")?.status).toBe(
+      "failed"
+    );
+    expect(result.workflow.nodes.find((node) => node.id === "analyze")?.status).toBe(
+      "blocked"
+    );
+    expect(result.agentRuns[0]?.modelCalls).toHaveLength(1);
+    expect(result.agentRuns[0]?.modelCalls[0]).toMatchObject({
+      provider: "mock",
+      task: "extract_facts",
+      status: "failed",
+      errorMessage: "Model output for extract_facts was not valid JSON"
+    });
+  });
+
+  it("records deterministic attribution failures as failed workflow runs", async () => {
+    const artifacts = new InMemoryArtifactStore();
+    const sourceArtifact = artifacts.put({
+      kind: "source_chunks",
+      value: {
+        projectId: "project_1",
+        chunks: [
+          {
+            id: "chunk_unknown",
+            sourceId: "source_unknown",
+            ordinal: 0,
+            text: "This source discusses pricing without naming the vendor.",
+            tokenCount: 8
+          }
+        ]
+      }
+    });
+    const requirementsArtifact = artifacts.put({
+      kind: "analysis_requirements",
+      value: {
+        competitors: [{ id: "competitor_cursor", name: "Cursor" }],
+        requiredDimensions: ["pricing"]
+      }
+    });
+    const workflow = createWorkflow({
+      id: "workflow_1",
+      projectId: "project_1",
+      nodes: [
+        createWorkflowNode("extract", "extract", [], [
+          sourceArtifact.id,
+          requirementsArtifact.id
+        ]),
+        createWorkflowNode("analyze", "analyze", ["extract"])
+      ]
+    });
+
+    const result = await runWorkflow({
+      workflow,
+      artifacts,
+      agents: createAnalysisWorkflowAgents()
+    });
+
+    expect(result.workflow.nodes.find((node) => node.id === "extract")?.status).toBe(
+      "failed"
+    );
+    expect(result.workflow.nodes.find((node) => node.id === "analyze")?.status).toBe(
+      "blocked"
+    );
+    expect(result.agentRuns[0]?.run).toMatchObject({
+      agentName: "extract",
+      status: "failed",
+      errorMessage: "Could not assign chunk chunk_unknown to a configured competitor"
+    });
   });
 });
 
@@ -363,26 +479,7 @@ describe("analyst agent", () => {
 
     const result = await runAgent(analyst, {
       projectId: "project_1",
-      artifacts: [
-        {
-          id: "artifact_facts",
-          kind: "facts",
-          createdAt: "2026-05-11T00:00:00.000Z",
-          value: {
-            facts: [
-              {
-                id: "fact_1",
-                projectId: "project_1",
-                competitorId: "Cursor",
-                dimension: "pricing",
-                statement: "Cursor offers paid plans.",
-                sourceChunkIds: ["chunk_1"],
-                confidence: 0.91
-              }
-            ]
-          }
-        }
-      ]
+      artifacts: [createFactsArtifact()]
     });
 
     expect(result.output.value).toMatchObject({
@@ -397,6 +494,11 @@ describe("analyst agent", () => {
     expect(model.calls[0]).toMatchObject({
       task: "synthesize_claims",
       responseFormat: "json_object"
+    });
+    expect(result.modelCalls[0]).toMatchObject({
+      provider: "mock",
+      task: "synthesize_claims",
+      status: "succeeded"
     });
   });
 
@@ -418,32 +520,24 @@ describe("analyst agent", () => {
         }
       ])
     });
+    const execution = runAgent(analyst, {
+      projectId: "project_1",
+      artifacts: [createFactsArtifact()]
+    });
 
-    await expect(
-      runAgent(analyst, {
-        projectId: "project_1",
-        artifacts: [
-          {
-            id: "artifact_facts",
-            kind: "facts",
-            createdAt: "2026-05-11T00:00:00.000Z",
-            value: {
-              facts: [
-                {
-                  id: "fact_1",
-                  projectId: "project_1",
-                  competitorId: "Cursor",
-                  dimension: "pricing",
-                  statement: "Cursor offers paid plans.",
-                  sourceChunkIds: ["chunk_1"],
-                  confidence: 0.91
-                }
-              ]
-            }
-          }
-        ]
-      })
-    ).rejects.toThrow("Model claim claim_1 cites unknown fact fact_missing");
+    await expect(execution).rejects.toThrow(
+      "Model claim claim_1 cites unknown fact fact_missing"
+    );
+    await expect(execution).rejects.toMatchObject({
+      modelCalls: [
+        expect.objectContaining({
+          provider: "mock",
+          task: "synthesize_claims",
+          status: "failed",
+          errorMessage: "Model claim claim_1 cites unknown fact fact_missing"
+        })
+      ]
+    });
   });
 });
 
@@ -453,32 +547,10 @@ describe("critic agent", () => {
     const result = await runAgent(critic, {
       projectId: "project_1",
       artifacts: [
-        {
-          id: "artifact_requirements",
-          kind: "analysis_requirements",
-          createdAt: "2026-05-11T00:00:00.000Z",
-          value: {
-            requiredDimensions: ["pricing", "positioning", "developer_experience"]
-          }
-        },
-        {
-          id: "artifact_facts",
-          kind: "facts",
-          createdAt: "2026-05-11T00:00:01.000Z",
-          value: {
-            facts: [
-              {
-                id: "fact_1",
-                projectId: "project_1",
-                competitorId: "cursor",
-                dimension: "pricing",
-                statement: "Cursor offers paid plans.",
-                sourceChunkIds: ["chunk_1"],
-                confidence: 0.9
-              }
-            ]
-          }
-        },
+        createRequirementsArtifact({
+          requiredDimensions: ["pricing", "positioning", "developer_experience"]
+        }),
+        createFactsArtifact(),
         {
           id: "artifact_claims",
           kind: "claims",
@@ -549,20 +621,83 @@ describe("critic agent", () => {
       status: "needs_revision",
       qualityScore: 20
     });
-    expect(JSON.stringify(output.value)).toContain(
-      "has no cited facts"
-    );
-    expect(JSON.stringify(output.value)).toContain(
-      "unknown fact fact_missing"
-    );
+    expect(JSON.stringify(output.value)).toContain("has no cited facts");
+    expect(JSON.stringify(output.value)).toContain("unknown fact fact_missing");
     expect(JSON.stringify(output.value)).toContain(
       "Missing required dimension developer_experience"
     );
     expect(JSON.stringify(output.value)).toContain(
       "section_summary has no cited claims"
     );
-    expect(JSON.stringify(output.value)).toContain(
-      "low confidence"
-    );
+    expect(JSON.stringify(output.value)).toContain("low confidence");
   });
 });
+
+function createWorkflowNode(
+  id: string,
+  agentName: string,
+  dependsOn: string[],
+  inputArtifactIds: string[] = []
+) {
+  return {
+    id,
+    type: "agent" as const,
+    agentName,
+    dependsOn,
+    status: "pending" as const,
+    inputArtifactIds,
+    outputArtifactIds: [],
+    retryCount: 0,
+    maxRetries: 1
+  };
+}
+
+function createRequirementsArtifact(value: {
+  competitors?: Array<{ id?: string; name: string }>;
+  requiredDimensions?: string[];
+}) {
+  return {
+    id: "artifact_requirements",
+    kind: "analysis_requirements" as const,
+    createdAt: "2026-05-11T00:00:00.000Z",
+    value
+  };
+}
+
+function createSourceChunksArtifact(
+  chunks: Array<{
+    id: string;
+    sourceId: string;
+    ordinal: number;
+    text: string;
+    tokenCount: number;
+  }>
+) {
+  return {
+    id: "artifact_sources",
+    kind: "source_chunks" as const,
+    createdAt: "2026-05-11T00:00:01.000Z",
+    value: { chunks }
+  };
+}
+
+function createFactsArtifact() {
+  return {
+    id: "artifact_facts",
+    kind: "facts" as const,
+    createdAt: "2026-05-11T00:00:00.000Z",
+    value: {
+      facts: [
+        {
+          id: "fact_1",
+          projectId: "project_1",
+          competitorId: "Cursor",
+          dimension: "pricing",
+          statement: "Cursor offers paid plans.",
+          sourceChunkIds: ["chunk_1"],
+          confidence: 0.91
+        }
+      ]
+    }
+  };
+}

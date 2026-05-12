@@ -31,15 +31,15 @@ The repository currently contains a complete MVP path:
 - Evidence-chain domain model.
 - Claim evidence validation.
 - Agent and Tool interfaces with schema validation.
-- Agent run and tool call records.
+- Agent run, tool call, and model call records.
 - In-memory artifact store.
 - Workflow runner that executes ready DAG nodes.
 - Mock Extract, Analyst, Writer, and Critic agents.
 - Real source-tooling contracts for fixture/Tavily search, URL fetch, HTML-to-text extraction, and stable text chunking.
-- Provider-neutral model gateway with deterministic mock mode, OpenAI-compatible HTTP mode, and Zod-validated structured outputs for Extract and Analyst agents.
+- Provider-neutral model gateway with deterministic mock mode, OpenAI-compatible HTTP mode, Zod-validated structured outputs for Extract and Analyst agents, and first-class model-call tracing.
 - Source collection persistence through the same Workflow, AgentRun, and ToolCall observability records used by analysis runs.
 - PostgreSQL persistence through Prisma repositories.
-- Next.js web UI for project creation, source preview, DAG execution, report review, evidence inspection, workflow status, and tool-call observability.
+- Next.js web UI for project creation, source preview, DAG execution, report review, evidence inspection, workflow status, tool-call observability, and model-call observability.
 - End-to-end source chunks -> facts -> claims -> report -> review findings flow.
 - Critic checks for unsupported claims, unknown fact references, low-confidence claims, report sections without cited claims, unknown claim references, and missing required analysis dimensions.
 
@@ -156,7 +156,7 @@ OPENAI_COMPATIBLE_MODEL="gpt-4o-mini"
 OPENAI_COMPATIBLE_BASE_URL="https://api.openai.com/v1"
 ```
 
-The model gateway is intentionally OpenAI-compatible rather than SDK-specific. This keeps tests offline while leaving room to connect OpenAI, Volcano Ark, or any compatible endpoint through environment variables. Model-backed Extract and Analyst agents still validate structured output locally: the system assigns fact and claim IDs, and rejects model references to unknown chunks or facts before artifacts enter the evidence chain.
+The model gateway is intentionally OpenAI-compatible rather than SDK-specific. This keeps tests offline while leaving room to connect OpenAI, Volcano Ark, or any compatible endpoint through environment variables. Model-backed Extract and Analyst agents still validate structured output locally: the system assigns fact and claim IDs, rejects model references to unknown chunks or facts, and rejects generated facts assigned to competitors outside the project allowlist before artifacts enter the evidence chain. Each model task is recorded as a model call trace with provider, task, status, bounded prompt trace input, bounded output, token usage when available, and validation/provider errors.
 
 The MVP flow is:
 

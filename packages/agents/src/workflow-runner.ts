@@ -13,6 +13,7 @@ import {
   runAgent
 } from "./agent";
 import type { Artifact, ArtifactStore } from "./artifacts";
+import type { ModelCallRecord } from "./model-client";
 import type { WorkflowAgent } from "./workflow-schemas";
 
 export interface RunWorkflowInput {
@@ -30,6 +31,7 @@ export interface WorkflowAgentRunRecord {
   nodeId: string;
   run: AgentRunRecord;
   toolCalls: ToolCallRecord[];
+  modelCalls: ModelCallRecord[];
 }
 
 export async function runWorkflow(
@@ -74,7 +76,8 @@ export async function runWorkflow(
         agentRuns.push({
           nodeId: readyNode.id,
           run: result.run,
-          toolCalls: result.toolCalls
+          toolCalls: result.toolCalls,
+          modelCalls: result.modelCalls
         });
         workflow = succeedNode(workflow, readyNode.id, [outputArtifact.id]);
       } catch (error) {
@@ -160,13 +163,15 @@ function getFailedRun(
   const maybeRun = error as {
     run?: AgentRunRecord;
     toolCalls?: ToolCallRecord[];
+    modelCalls?: ModelCallRecord[];
   };
 
   if (maybeRun.run) {
     return {
       nodeId,
       run: maybeRun.run,
-      toolCalls: maybeRun.toolCalls ?? []
+      toolCalls: maybeRun.toolCalls ?? [],
+      modelCalls: maybeRun.modelCalls ?? []
     };
   }
 
@@ -182,7 +187,8 @@ function getFailedRun(
       startedAt: now,
       finishedAt: now
     },
-    toolCalls: []
+    toolCalls: [],
+    modelCalls: []
   };
 }
 

@@ -6,7 +6,8 @@ import type {
   ReportStatus,
   WorkflowNodeStatus,
   AgentRunStatus,
-  ToolCallStatus
+  ToolCallStatus,
+  ModelCallStatus
 } from "@prisma/client";
 import type { Workflow } from "@rivalscope/core";
 import type {
@@ -38,6 +39,22 @@ export interface PersistAnalysisRepositories {
         status: ToolCallStatus;
         input: Prisma.InputJsonValue;
         output?: Prisma.InputJsonValue;
+        errorMessage?: string;
+        startedAt: Date;
+        finishedAt: Date;
+      }>
+    ): Promise<unknown>;
+    createModelCalls(
+      agentRunId: string,
+      modelCalls: Array<{
+        provider: string;
+        model?: string;
+        task: string;
+        status: ModelCallStatus;
+        responseFormat?: string;
+        input: Prisma.InputJsonValue;
+        output?: Prisma.InputJsonValue;
+        usage?: Prisma.InputJsonValue;
         errorMessage?: string;
         startedAt: Date;
         finishedAt: Date;
@@ -121,7 +138,7 @@ export interface PersistAnalysisExecutionInput {
 export interface PersistAnalysisExecutionResult {
   workflow: Workflow;
   artifacts: Array<{ id: string }>;
-  report: { id: string };
+  report?: { id: string };
 }
 
 export async function persistAnalysisExecution(
@@ -182,6 +199,30 @@ export async function persistAnalysisExecution(
         finishedAt: new Date(toolCall.finishedAt)
       }))
     );
+    await input.repositories.workflow.createModelCalls(
+      persistedRun.id,
+      agentRun.modelCalls.map((modelCall) => ({
+        provider: modelCall.provider,
+        ...(modelCall.model !== undefined ? { model: modelCall.model } : {}),
+        task: modelCall.task,
+        status: toDbModelCallStatus(modelCall.status),
+        ...(modelCall.responseFormat !== undefined
+          ? { responseFormat: modelCall.responseFormat }
+          : {}),
+        input: modelCall.input as Prisma.InputJsonValue,
+        ...(modelCall.output !== undefined
+          ? { output: modelCall.output as Prisma.InputJsonValue }
+          : {}),
+        ...(modelCall.usage !== undefined
+          ? { usage: modelCall.usage as Prisma.InputJsonValue }
+          : {}),
+        ...(modelCall.errorMessage !== undefined
+          ? { errorMessage: modelCall.errorMessage }
+          : {}),
+        startedAt: new Date(modelCall.startedAt),
+        finishedAt: new Date(modelCall.finishedAt)
+      }))
+    );
   }
 
   const updatedWorkflow: Workflow = {
@@ -223,17 +264,19 @@ export async function persistAnalysisExecution(
     }))
   );
 
-  const intelligence = await persistIntelligence(
-    input.projectId,
-    input.competitors,
-    input.artifacts,
-    input.repositories.intelligence
-  );
+  const intelligence = shouldPersistIntelligence(input.workflow, input.artifacts)
+    ? await persistIntelligence(
+        input.projectId,
+        input.competitors,
+        input.artifacts,
+        input.repositories.intelligence
+      )
+    : undefined;
 
   return {
     workflow: updatedWorkflow,
     artifacts: persistedArtifacts,
-    report: intelligence.report
+    ...(intelligence ? { report: intelligence.report } : {})
   };
 }
 
@@ -298,16 +341,20 @@ async function persistIntelligence(
   }>(artifacts, "review_findings");
 
   const competitorByKey = new Map(
-    competitors.map((competitor) => [competitor.name.toLowerCase(), competitor.id])
+    competitors.flatMap((competitor) => [
+      [competitor.id.toLowerCase(), competitor.id],
+      [competitor.name.toLowerCase(), competitor.id]
+    ])
   );
   const persistedFactIds = new Map<string, string>();
 
   for (const fact of factsArtifact.facts) {
-    const competitorId =
-      competitorByKey.get(fact.competitorId.toLowerCase()) ?? competitors[0]?.id;
+    const competitorId = competitorByKey.get(fact.competitorId.toLowerCase());
 
     if (!competitorId) {
-      continue;
+      throw new Error(
+        `Fact ${fact.id} references unknown competitor ${fact.competitorId}`
+      );
     }
 
     const persistedFact = await repository.createFact({
@@ -369,6 +416,18 @@ async function persistIntelligence(
   );
 
   return { report };
+}
+
+function shouldPersistIntelligence(workflow: Workflow, artifacts: Artifact[]): boolean {
+  if (!workflow.nodes.every((node) => node.status === "succeeded")) {
+    return false;
+  }
+
+  const artifactKinds = new Set(artifacts.map((artifact) => artifact.kind));
+
+  return ["facts", "claims", "report", "review_findings"].every((kind) =>
+    artifactKinds.has(kind as Artifact["kind"])
+  );
 }
 
 function findArtifact<T>(artifacts: Artifact[], kind: string): T {
@@ -449,4 +508,8 @@ function toDbToolCallStatus(status: WorkflowAgentRunRecord["toolCalls"][number][
   };
 
   return mapping[status];
+}
+
+function toDbModelCallStatus(status: WorkflowAgentRunRecord["modelCalls"][number]["status"]): ModelCallStatus {
+  return status === "succeeded" ? "SUCCEEDED" : "FAILED";
 }

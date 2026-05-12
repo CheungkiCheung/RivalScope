@@ -35,4 +35,22 @@ describe("model client env", () => {
 
     expect(options.model?.name).toBe("openai-compatible");
   });
+
+  test("rejects unknown analysis modes instead of silently changing execution mode", () => {
+    expect(() =>
+      createAnalysisAgentOptionsFromEnv({
+        RIVALSCOPE_ANALYSIS_AGENT_MODE: "modle"
+      })
+    ).toThrow("Unsupported analysis agent mode modle");
+  });
+
+  test("requires an explicit real model provider when model-backed analysis is enabled", () => {
+    expect(() =>
+      createAnalysisAgentOptionsFromEnv({
+        RIVALSCOPE_ANALYSIS_AGENT_MODE: "model"
+      })
+    ).toThrow(
+      "RIVALSCOPE_MODEL_PROVIDER must be openai-compatible when RIVALSCOPE_ANALYSIS_AGENT_MODE is model"
+    );
+  });
 });

@@ -29,7 +29,44 @@ export interface ModelGenerateOutput {
 
 export interface ModelClient {
   name: string;
+  model?: string;
   generate(input: ModelGenerateInput): Promise<ModelGenerateOutput>;
+}
+
+export type ModelCallStatus = "succeeded" | "failed";
+
+export interface ModelCallRecord {
+  id: string;
+  provider: string;
+  model?: string;
+  task: string;
+  status: ModelCallStatus;
+  responseFormat?: ModelResponseFormat;
+  input: unknown;
+  output?: unknown;
+  usage?: ModelUsage;
+  errorMessage?: string;
+  startedAt: string;
+  finishedAt: string;
+}
+
+export interface ModelCallRecordInput {
+  provider: string;
+  model?: string;
+  task: string;
+  status: ModelCallStatus;
+  responseFormat?: ModelResponseFormat;
+  input: unknown;
+  output?: unknown;
+  usage?: ModelUsage;
+  errorMessage?: string;
+  startedAt: string;
+  finishedAt: string;
+}
+
+export interface ModelCallRecorder {
+  now(): string;
+  recordModelCall(input: ModelCallRecordInput): void;
 }
 
 export interface MockModelResponse {
@@ -60,29 +97,95 @@ export class MockModelClient implements ModelClient {
   }
 }
 
-export interface GenerateStructuredObjectInput<T> extends ModelGenerateInput {
+export interface GenerateStructuredObjectInput<T, R = T> extends ModelGenerateInput {
   model: ModelClient;
   schema: z.ZodType<T>;
+  recorder?: ModelCallRecorder;
+  transform?: (output: T) => R;
 }
 
-export async function generateStructuredObject<T>(
-  input: GenerateStructuredObjectInput<T>
-): Promise<T> {
-  const output = await input.model.generate({
+export async function generateStructuredObject<T, R = T>(
+  input: GenerateStructuredObjectInput<T, R>
+): Promise<R> {
+  const generateInput = {
     task: input.task,
     system: input.system,
     messages: input.messages,
     responseFormat: "json_object"
-  });
+  } satisfies ModelGenerateInput;
+  const startedAt = input.recorder?.now();
+  let output: ModelGenerateOutput | undefined;
   let parsed: unknown;
 
   try {
+    output = await input.model.generate(generateInput);
     parsed = JSON.parse(output.content);
-  } catch {
-    throw new Error(`Model output for ${input.task} was not valid JSON`);
+  } catch (error) {
+    const normalized =
+      error instanceof SyntaxError
+        ? new Error(`Model output for ${input.task} was not valid JSON`)
+        : error;
+
+    if (input.recorder && startedAt) {
+      input.recorder.recordModelCall({
+        provider: input.model.name,
+        ...(input.model.model ? { model: input.model.model } : {}),
+        task: input.task,
+        status: "failed",
+        responseFormat: "json_object",
+        input: getModelTraceInput(generateInput),
+        ...(output ? { output: getModelTraceOutput(output) } : {}),
+        ...(output?.usage ? { usage: output.usage } : {}),
+        errorMessage: getErrorMessage(normalized),
+        startedAt,
+        finishedAt: input.recorder.now()
+      });
+    }
+
+    throw normalized;
   }
 
-  return input.schema.parse(parsed);
+  try {
+    const validated = input.schema.parse(parsed);
+    const result = input.transform
+      ? input.transform(validated)
+      : (validated as unknown as R);
+
+    if (input.recorder && startedAt && output) {
+      input.recorder.recordModelCall({
+        provider: input.model.name,
+        ...(input.model.model ? { model: input.model.model } : {}),
+        task: input.task,
+        status: "succeeded",
+        responseFormat: "json_object",
+        input: getModelTraceInput(generateInput),
+        output: getModelTraceOutput(output),
+        ...(output.usage ? { usage: output.usage } : {}),
+        startedAt,
+        finishedAt: input.recorder.now()
+      });
+    }
+
+    return result;
+  } catch (error) {
+    if (input.recorder && startedAt && output) {
+      input.recorder.recordModelCall({
+        provider: input.model.name,
+        ...(input.model.model ? { model: input.model.model } : {}),
+        task: input.task,
+        status: "failed",
+        responseFormat: "json_object",
+        input: getModelTraceInput(generateInput),
+        output: getModelTraceOutput(output),
+        ...(output.usage ? { usage: output.usage } : {}),
+        errorMessage: getErrorMessage(error),
+        startedAt,
+        finishedAt: input.recorder.now()
+      });
+    }
+
+    throw error;
+  }
 }
 
 export interface OpenAICompatibleModelClientOptions {
@@ -115,6 +218,7 @@ export function createOpenAICompatibleModelClient(
 
   return {
     name: "openai-compatible",
+    model: options.model,
     generate: async (input) => {
       const response = await fetchWithTimeout({
         url: `${baseUrl}/chat/completions`,
@@ -147,7 +251,7 @@ export function createOpenAICompatibleModelClient(
       });
 
       if (!response.ok) {
-        const message = await response.text();
+        const message = sanitizeProviderErrorBody(await response.text());
         throw new Error(
           `OpenAI-compatible model request failed with status ${response.status}: ${message}`
         );
@@ -181,6 +285,49 @@ export function createOpenAICompatibleModelClient(
       };
     }
   };
+}
+
+export function getModelTraceInput(input: ModelGenerateInput) {
+  return {
+    system: truncateTraceString(input.system),
+    messages: input.messages.map((message) => ({
+      role: message.role,
+      content: truncateTraceString(message.content)
+    })),
+    ...(input.responseFormat ? { responseFormat: input.responseFormat } : {})
+  };
+}
+
+export function getModelTraceOutput(output: ModelGenerateOutput) {
+  return {
+    content: truncateTraceString(output.content)
+  };
+}
+
+const maxTraceStringLength = 1_000;
+
+function truncateTraceString(value: string): string {
+  if (value.length <= maxTraceStringLength) {
+    return value;
+  }
+
+  return `${value.slice(0, maxTraceStringLength)} [truncated ${
+    value.length - maxTraceStringLength
+  } chars]`;
+}
+
+function sanitizeProviderErrorBody(body: string): string {
+  const singleLine = body.replace(/\s+/g, " ").trim();
+
+  if (!singleLine) {
+    return "empty response body";
+  }
+
+  return singleLine.slice(0, 500);
+}
+
+function getErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
 
 async function fetchWithTimeout(input: {
