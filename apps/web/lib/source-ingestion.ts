@@ -1,4 +1,4 @@
-import type { ToolCallRecord } from "@rivalscope/agents";
+import type { Tool, ToolCallRecord } from "@rivalscope/agents";
 import { createAgentRunContext } from "@rivalscope/agents";
 import {
   createChunkTextTool,
@@ -6,7 +6,10 @@ import {
   createFixtureSearchAgentTool,
   createHtmlToTextTool,
   normalizeSourceTitle,
-  type FixtureSearchIndex
+  searchInputSchema,
+  searchOutputSchema,
+  type FixtureSearchIndex,
+  type SearchProvider
 } from "@rivalscope/tools";
 
 export interface CollectFixtureSourcesInput {
@@ -14,6 +17,14 @@ export interface CollectFixtureSourcesInput {
   dimensions: string[];
   searchIndex: FixtureSearchIndex;
   documentsByUrl: Record<string, string>;
+  maxWordsPerChunk?: number;
+}
+
+export interface CollectSourcesInput {
+  competitors: string[];
+  dimensions: string[];
+  searchProvider: SearchProvider;
+  documentsByUrl?: Record<string, string>;
   maxWordsPerChunk?: number;
 }
 
@@ -36,16 +47,34 @@ export interface CollectFixtureSourcesResult {
 export async function collectFixtureSources(
   input: CollectFixtureSourcesInput
 ): Promise<CollectFixtureSourcesResult> {
-  const context = createAgentRunContext();
   const searchTool = createFixtureSearchAgentTool(input.searchIndex);
-  const fetchTool = createFetchUrlTool(async (url) => {
-    const html = input.documentsByUrl[url];
+
+  return collectSources({
+    competitors: input.competitors,
+    dimensions: input.dimensions,
+    searchProvider: {
+      name: "fixture",
+      search: (searchInput) => searchTool.execute(searchInput, {
+        now: () => new Date().toISOString()
+      })
+    },
+    documentsByUrl: input.documentsByUrl,
+    ...(input.maxWordsPerChunk !== undefined
+      ? { maxWordsPerChunk: input.maxWordsPerChunk }
+      : {})
+  });
+}
+
+export async function collectSources(
+  input: CollectSourcesInput
+): Promise<CollectFixtureSourcesResult> {
+  const context = createAgentRunContext();
+  const searchTool = createSearchProviderAgentTool(input.searchProvider);
+  const fetchTool = createFetchUrlTool(async (url, init) => {
+    const html = input.documentsByUrl?.[url];
 
     if (html === undefined) {
-      return new Response("", {
-        status: 404,
-        headers: { "content-type": "text/plain" }
-      });
+      return fetch(url, init);
     }
 
     return new Response(html, {
@@ -65,12 +94,12 @@ export async function collectFixtureSources(
     });
 
     for (const result of search.results) {
-      const fetched = await context.callTool(fetchTool, {
+      const fetched = await callToolOrSkip(context, fetchTool, {
         url: result.url,
         maxBytes: 500_000
       });
 
-      if (fetched.status < 200 || fetched.status >= 300) {
+      if (!fetched || fetched.status < 200 || fetched.status >= 300) {
         continue;
       }
 
@@ -103,6 +132,29 @@ export async function collectFixtureSources(
   return {
     sources,
     toolCalls: context.getToolCalls()
+  };
+}
+
+async function callToolOrSkip<I, O>(
+  context: ReturnType<typeof createAgentRunContext>,
+  tool: Tool<I, O>,
+  input: I
+): Promise<O | undefined> {
+  try {
+    return await context.callTool(tool, input);
+  } catch {
+    return undefined;
+  }
+}
+
+function createSearchProviderAgentTool(searchProvider: SearchProvider) {
+  return {
+    name: `${searchProvider.name}_search`,
+    description: `Searches public sources with the ${searchProvider.name} provider.`,
+    inputSchema: searchInputSchema,
+    outputSchema: searchOutputSchema,
+    execute: async (input: Parameters<SearchProvider["search"]>[0]) =>
+      searchProvider.search(input)
   };
 }
 

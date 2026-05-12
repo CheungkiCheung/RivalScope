@@ -107,6 +107,108 @@ describe("source tools", () => {
     ).rejects.toThrow("exceeds maxBytes");
   });
 
+  test("fetchUrl rejects unsafe URL targets before requesting them", async () => {
+    const requestedUrls: string[] = [];
+
+    for (const url of [
+      "file:///etc/passwd",
+      "http://localhost:3000/admin",
+      "http://127.0.0.1:3000/admin",
+      "http://10.0.0.5/internal",
+      "http://172.16.0.5/internal",
+      "http://192.168.1.5/internal",
+      "http://169.254.169.254/latest/meta-data"
+    ]) {
+      await expect(
+        fetchUrl({ url }, async (requestedUrl) => {
+          requestedUrls.push(requestedUrl);
+
+          return new Response("should not fetch");
+        })
+      ).rejects.toThrow("Unsafe fetch URL");
+    }
+
+    expect(requestedUrls).toEqual([]);
+  });
+
+  test("fetchUrl follows safe redirects with a redirect limit", async () => {
+    const requestedUrls: string[] = [];
+    const requestInit: Array<RequestInit | undefined> = [];
+    const result = await fetchUrl(
+      {
+        url: "https://example.com/start",
+        maxRedirects: 1
+      },
+      async (requestedUrl, init) => {
+        requestedUrls.push(requestedUrl);
+        requestInit.push(init);
+
+        if (requestedUrl === "https://example.com/start") {
+          return new Response("", {
+            status: 302,
+            headers: { location: "https://example.com/final" }
+          });
+        }
+
+        return new Response("final body", {
+          status: 200,
+          headers: { "content-type": "text/html" }
+        });
+      }
+    );
+
+    expect(requestedUrls).toEqual([
+      "https://example.com/start",
+      "https://example.com/final"
+    ]);
+    expect(result).toMatchObject({
+      url: "https://example.com/final",
+      status: 200,
+      body: "final body"
+    });
+    expect(requestInit.every((init) => init?.redirect === "manual")).toBe(true);
+  });
+
+  test("fetchUrl rejects redirects to unsafe targets", async () => {
+    const requestedUrls: string[] = [];
+
+    await expect(
+      fetchUrl(
+        {
+          url: "https://example.com/start",
+          maxRedirects: 2
+        },
+        async (requestedUrl) => {
+          requestedUrls.push(requestedUrl);
+
+          return new Response("", {
+            status: 302,
+            headers: { location: "http://127.0.0.1:3000/admin" }
+          });
+        }
+      )
+    ).rejects.toThrow("Unsafe fetch URL");
+
+    expect(requestedUrls).toEqual(["https://example.com/start"]);
+  });
+
+  test("fetchUrl times out slow responses", async () => {
+    await expect(
+      fetchUrl(
+        {
+          url: "https://example.com/slow",
+          timeoutMs: 1
+        },
+        async (_requestedUrl, init) =>
+          new Promise<Response>((_resolve, reject) => {
+            init?.signal?.addEventListener("abort", () => {
+              reject(new Error("aborted"));
+            });
+          })
+      )
+    ).rejects.toThrow("timed out");
+  });
+
   test("normalizeSourceTitle falls back to hostname when title is empty", () => {
     expect(
       normalizeSourceTitle({

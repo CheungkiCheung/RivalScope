@@ -6,7 +6,8 @@ import {
   prisma
 } from "@rivalscope/db";
 import { demoDocumentsByUrl, demoSearchIndex } from "../../../lib/demo-source-fixtures";
-import { collectFixtureSources } from "../../../lib/source-ingestion";
+import { createConfiguredSearchProvider } from "../../../lib/search-provider-env";
+import { collectSources } from "../../../lib/source-ingestion";
 import { persistSourceCollectionRun } from "../../../lib/source-collection-persistence";
 
 const defaultSource = `Cursor offers individual Pro and Team plans for AI coding.
@@ -32,6 +33,10 @@ export default function NewProjectPage() {
       .map((item) => item.trim())
       .filter(Boolean);
     const sourceText = String(formData.get("sourceText") ?? defaultSource);
+    const searchProvider = createConfiguredSearchProvider({
+      env: process.env,
+      fixtureIndex: demoSearchIndex
+    });
 
     const project = await new ProjectRepository(prisma).create({
       owner: {
@@ -51,10 +56,10 @@ export default function NewProjectPage() {
     });
 
     const sourceRepository = new SourceRepository(prisma);
-    const collected = await collectFixtureSources({
+    const collected = await collectSources({
       competitors,
       dimensions,
-      searchIndex: demoSearchIndex,
+      searchProvider,
       documentsByUrl: demoDocumentsByUrl,
       maxWordsPerChunk: 80
     });

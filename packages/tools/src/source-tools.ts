@@ -47,7 +47,9 @@ export function createFixtureSearchTool(index: FixtureSearchIndex) {
 
 export const fetchUrlInputSchema = z.object({
   url: z.string().url(),
-  maxBytes: z.number().int().positive().default(500_000)
+  maxBytes: z.number().int().positive().default(500_000),
+  maxRedirects: z.number().int().nonnegative().max(5).default(2),
+  timeoutMs: z.number().int().positive().max(30_000).default(10_000)
 });
 
 export const fetchUrlOutputSchema = z.object({
@@ -59,14 +61,22 @@ export const fetchUrlOutputSchema = z.object({
 
 export type FetchUrlInput = z.input<typeof fetchUrlInputSchema>;
 export type FetchUrlOutput = z.infer<typeof fetchUrlOutputSchema>;
-export type FetchImplementation = (url: string) => Promise<Response>;
+export type FetchImplementation = (
+  url: string,
+  init?: RequestInit
+) => Promise<Response>;
 
 export async function fetchUrl(
   input: FetchUrlInput,
   fetchImplementation: FetchImplementation = fetch
 ): Promise<FetchUrlOutput> {
   const parsed = fetchUrlInputSchema.parse(input);
-  const response = await fetchImplementation(parsed.url);
+  const { response, url } = await fetchWithSafeRedirects({
+    url: parsed.url,
+    maxRedirects: parsed.maxRedirects,
+    timeoutMs: parsed.timeoutMs,
+    fetchImplementation
+  });
   const body = await response.text();
   const bytes = new TextEncoder().encode(body).byteLength;
 
@@ -77,11 +87,138 @@ export async function fetchUrl(
   }
 
   return {
-    url: parsed.url,
+    url,
     status: response.status,
     contentType: response.headers.get("content-type") ?? "application/octet-stream",
     body
   };
+}
+
+async function fetchWithSafeRedirects(input: {
+  url: string;
+  maxRedirects: number;
+  timeoutMs: number;
+  fetchImplementation: FetchImplementation;
+}): Promise<{ response: Response; url: string }> {
+  let currentUrl = input.url;
+
+  for (let redirectCount = 0; redirectCount <= input.maxRedirects; redirectCount += 1) {
+    assertSafeFetchUrl(currentUrl);
+
+    const response = await fetchWithTimeout({
+      url: currentUrl,
+      timeoutMs: input.timeoutMs,
+      fetchImplementation: input.fetchImplementation
+    });
+
+    if (!isRedirectStatus(response.status)) {
+      return {
+        response,
+        url: currentUrl
+      };
+    }
+
+    const location = response.headers.get("location");
+
+    if (!location) {
+      return {
+        response,
+        url: currentUrl
+      };
+    }
+
+    if (redirectCount === input.maxRedirects) {
+      throw new Error(`Fetch URL ${input.url} exceeded maxRedirects ${input.maxRedirects}`);
+    }
+
+    currentUrl = new URL(location, currentUrl).toString();
+  }
+
+  throw new Error(`Fetch URL ${input.url} exceeded maxRedirects ${input.maxRedirects}`);
+}
+
+async function fetchWithTimeout(input: {
+  url: string;
+  timeoutMs: number;
+  fetchImplementation: FetchImplementation;
+}): Promise<Response> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => {
+    controller.abort();
+  }, input.timeoutMs);
+
+  try {
+    return await input.fetchImplementation(input.url, {
+      redirect: "manual",
+      signal: controller.signal
+    });
+  } catch (error) {
+    if (controller.signal.aborted) {
+      throw new Error(`Fetch URL ${input.url} timed out after ${input.timeoutMs}ms`);
+    }
+
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+function isRedirectStatus(status: number): boolean {
+  return status >= 300 && status < 400;
+}
+
+function assertSafeFetchUrl(url: string): void {
+  const parsed = new URL(url);
+  const hostname = parsed.hostname.toLowerCase();
+
+  if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
+    throw new Error(`Unsafe fetch URL ${url}: only HTTP(S) URLs are allowed`);
+  }
+
+  if (isLocalHostname(hostname) || isPrivateIpAddress(hostname)) {
+    throw new Error(`Unsafe fetch URL ${url}: local and private network targets are blocked`);
+  }
+}
+
+function isLocalHostname(hostname: string): boolean {
+  return hostname === "localhost" || hostname.endsWith(".localhost");
+}
+
+function isPrivateIpAddress(hostname: string): boolean {
+  if (hostname === "::1" || hostname === "0:0:0:0:0:0:0:1") {
+    return true;
+  }
+
+  const ipv4Parts = hostname.split(".");
+
+  if (ipv4Parts.length !== 4) {
+    return false;
+  }
+
+  const octets = ipv4Parts.map((part) => Number(part));
+
+  if (
+    octets.some(
+      (octet, index) =>
+        !Number.isInteger(octet) ||
+        octet < 0 ||
+        octet > 255 ||
+        String(octet) !== ipv4Parts[index]
+    )
+  ) {
+    return false;
+  }
+
+  const [first = 0, second = 0] = octets;
+
+  return (
+    first === 0 ||
+    first === 10 ||
+    first === 127 ||
+    (first === 169 && second === 254) ||
+    (first === 172 && second >= 16 && second <= 31) ||
+    (first === 192 && second === 168)
+  );
 }
 
 export const htmlToTextInputSchema = z.object({

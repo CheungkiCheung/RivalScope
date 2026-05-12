@@ -1,7 +1,99 @@
 import { describe, expect, test } from "vitest";
-import { collectFixtureSources } from "./source-ingestion";
+import { collectFixtureSources, collectSources } from "./source-ingestion";
 
 describe("source ingestion", () => {
+  test("collectSources uses the provided search provider", async () => {
+    const calls: unknown[] = [];
+    const result = await collectSources({
+      competitors: ["Cursor"],
+      dimensions: ["pricing"],
+      searchProvider: {
+        name: "test",
+        search: async (input) => {
+          calls.push(input);
+
+          return {
+            results: [
+              {
+                title: "Cursor real result",
+                url: "https://real.example/cursor",
+                snippet: "real search",
+                competitor: "Cursor",
+                rank: 1
+              }
+            ]
+          };
+        }
+      },
+      documentsByUrl: {
+        "https://real.example/cursor":
+          "<main><h1>Cursor real result</h1><p>Provider-backed source.</p></main>"
+      },
+      maxWordsPerChunk: 8
+    });
+
+    expect(calls).toEqual([
+      {
+        competitor: "Cursor",
+        dimensions: ["pricing"],
+        limit: 1
+      }
+    ]);
+    expect(result.sources[0]).toMatchObject({
+      kind: "URL",
+      title: "Cursor real result",
+      uri: "https://real.example/cursor"
+    });
+  });
+
+  test("collectSources skips failed fetches and keeps successful source collection running", async () => {
+    const result = await collectSources({
+      competitors: ["Cursor", "Codex"],
+      dimensions: ["pricing"],
+      searchProvider: {
+        name: "test",
+        search: async (input) => ({
+          results: [
+            {
+              title: `${input.competitor} result`,
+              url:
+                input.competitor === "Cursor"
+                  ? "http://127.0.0.1:3000/internal"
+                  : "https://real.example/codex",
+              snippet: "provider search",
+              competitor: input.competitor,
+              rank: 1
+            }
+          ]
+        })
+      },
+      documentsByUrl: {
+        "https://real.example/codex":
+          "<main><h1>Codex public result</h1><p>Provider-backed source.</p></main>"
+      },
+      maxWordsPerChunk: 8
+    });
+
+    expect(result.sources).toHaveLength(1);
+    expect(result.sources[0]).toMatchObject({
+      title: "Codex result",
+      uri: "https://real.example/codex"
+    });
+    expect(result.toolCalls).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          toolName: "test_search",
+          status: "succeeded"
+        }),
+        expect.objectContaining({
+          toolName: "fetch_url",
+          status: "failed",
+          errorMessage: expect.stringContaining("Unsafe fetch URL")
+        })
+      ])
+    );
+  });
+
   test("collects one parsed and chunked source per competitor result", async () => {
     const result = await collectFixtureSources({
       competitors: ["Cursor", "Codex"],

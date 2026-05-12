@@ -35,7 +35,7 @@ The repository currently contains a complete MVP path:
 - In-memory artifact store.
 - Workflow runner that executes ready DAG nodes.
 - Mock Extract, Analyst, Writer, and Critic agents.
-- Real source-tooling contracts for fixture search, URL fetch, HTML-to-text extraction, and stable text chunking.
+- Real source-tooling contracts for fixture/Tavily search, URL fetch, HTML-to-text extraction, and stable text chunking.
 - Source collection persistence through the same Workflow, AgentRun, and ToolCall observability records used by analysis runs.
 - PostgreSQL persistence through Prisma repositories.
 - Next.js web UI for project creation, source preview, DAG execution, report review, evidence inspection, workflow status, and tool-call observability.
@@ -136,6 +136,13 @@ Run the web MVP:
 
 ```bash
 DATABASE_URL="postgresql://postgres:postgres@localhost:5432/rivalscope?schema=public" npm run dev --workspace @rivalscope/web
+```
+
+Source collection uses deterministic fixture search by default so local demos and tests do not require network credentials. To use Tavily for URL search, set:
+
+```bash
+RIVALSCOPE_SEARCH_PROVIDER="tavily"
+TAVILY_API_KEY="..."
 ```
 
 The MVP flow is:

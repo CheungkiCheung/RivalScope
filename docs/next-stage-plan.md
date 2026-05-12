@@ -37,7 +37,7 @@ Useful references:
 
 Goal: replace seeded source chunks with a real source-ingestion path.
 
-Status: partially implemented. The project now has structured source tools, a deterministic fixture search/fetch path for demos and tests, source preview in the project UI, and source collection tool calls persisted through workflow observability records. External search provider adapters are still pending.
+Status: implemented for the MVP path. The project now has structured source tools, deterministic fixture search/fetch for demos and tests, an optional Tavily search provider behind environment variables, source preview in the project UI, and source collection tool calls persisted through workflow observability records.
 
 Tasks:
 
@@ -47,7 +47,7 @@ Tasks:
 4. Done: Add `ChunkTextTool` with stable chunk IDs and token-count metadata.
 5. Done: Persist tool calls and generated sources/chunks for fixture source collection.
 6. Done: Add UI for source collection status and parsed source preview.
-7. Pending: Add a real search provider adapter behind environment configuration.
+7. Done: Add a Tavily search provider adapter behind environment configuration.
 
 Acceptance criteria:
 
