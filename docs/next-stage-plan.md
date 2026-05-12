@@ -60,14 +60,16 @@ Acceptance criteria:
 
 Goal: make LLM usage replaceable and testable without coupling the workflow to one provider.
 
+Status: implemented for the MVP path. The project now has a provider-neutral `ModelClient`, deterministic `MockModelClient`, OpenAI-compatible HTTP adapter behind environment variables, Zod structured-output validation, reference validation for generated facts/claims, and optional model-backed Extract and Analyst agents while preserving the offline deterministic default.
+
 Tasks:
 
-1. Add a provider-neutral `ModelClient` interface.
-2. Add `MockModelClient` for tests.
-3. Add one real provider adapter behind environment variables.
-4. Add structured-output helpers using Zod schemas.
-5. Convert Extract and Analyst agents to optionally use the model gateway.
-6. Keep deterministic mock agents available for tests and offline demos.
+1. Done: Add a provider-neutral `ModelClient` interface.
+2. Done: Add `MockModelClient` for tests.
+3. Done: Add an OpenAI-compatible provider adapter behind environment variables.
+4. Done: Add structured-output helpers using Zod schemas.
+5. Done: Convert Extract and Analyst agents to optionally use the model gateway.
+6. Done: Keep deterministic mock agents available for tests and offline demos.
 
 Acceptance criteria:
 
@@ -75,6 +77,12 @@ Acceptance criteria:
 - Missing API keys fail with a clear startup/runtime error.
 - Real LLM agents produce schema-validated facts and claims.
 - Invalid model output is rejected and recorded as an agent failure.
+
+Remaining hardening:
+
+- Persist model request metadata and token usage into first-class observability records.
+- Add schema-level report validation that rejects report sections citing unknown claims before persistence.
+- Add model-output repair/retry policy after eval baselines exist.
 
 ## Stage 3: Routed Research DAG
 

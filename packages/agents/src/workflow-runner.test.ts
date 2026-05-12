@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { createWorkflow } from "@rivalscope/core";
 import {
   createAnalysisWorkflowAgents,
+  createAnalystAgent,
   createExtractAgent,
   createCriticAgent
 } from "./analysis-agents";
@@ -10,6 +11,7 @@ import {
   runWorkflow
 } from "./workflow-runner";
 import { runAgent } from "./agent";
+import { MockModelClient } from "./model-client";
 
 describe("workflow runner", () => {
   it("executes the extract -> analyze -> write -> critique chain with artifacts", async () => {
@@ -224,6 +226,224 @@ describe("extract agent", () => {
         }
       ]
     });
+  });
+
+  it("can use a model client for schema-validated fact extraction", async () => {
+    const model = new MockModelClient([
+      {
+        content: JSON.stringify({
+          facts: [
+            {
+              id: "fact_model_1",
+              projectId: "attacker_project",
+              competitorId: "Cursor",
+              dimension: "pricing",
+              statement: "Cursor offers paid Pro and Team plans.",
+              sourceChunkIds: ["chunk_cursor_pricing"],
+              confidence: 0.91
+            }
+          ]
+        })
+      }
+    ]);
+    const extract = createExtractAgent({ model });
+
+    const result = await runAgent(extract, {
+      projectId: "project_1",
+      artifacts: [
+        {
+          id: "artifact_requirements",
+          kind: "analysis_requirements",
+          createdAt: "2026-05-11T00:00:00.000Z",
+          value: {
+            competitors: [{ name: "Cursor" }],
+            requiredDimensions: ["pricing"]
+          }
+        },
+        {
+          id: "artifact_sources",
+          kind: "source_chunks",
+          createdAt: "2026-05-11T00:00:01.000Z",
+          value: {
+            chunks: [
+              {
+                id: "chunk_cursor_pricing",
+                sourceId: "source_cursor",
+                ordinal: 0,
+                text: "Cursor offers paid Pro and Team plans.",
+                tokenCount: 7
+              }
+            ]
+          }
+        }
+      ]
+    });
+
+    expect(result.output.value).toMatchObject({
+      facts: [
+        {
+          id: "fact_1",
+          projectId: "project_1",
+          competitorId: "Cursor",
+          sourceChunkIds: ["chunk_cursor_pricing"]
+        }
+      ]
+    });
+    expect(model.calls[0]).toMatchObject({
+      task: "extract_facts",
+      responseFormat: "json_object"
+    });
+  });
+
+  it("rejects model facts that cite unknown source chunks", async () => {
+    const extract = createExtractAgent({
+      model: new MockModelClient([
+        {
+          content: JSON.stringify({
+            facts: [
+              {
+                competitorId: "Cursor",
+                dimension: "pricing",
+                statement: "Cursor offers paid plans.",
+                sourceChunkIds: ["chunk_missing"],
+                confidence: 0.9
+              }
+            ]
+          })
+        }
+      ])
+    });
+
+    await expect(
+      runAgent(extract, {
+        projectId: "project_1",
+        artifacts: [
+          {
+            id: "artifact_sources",
+            kind: "source_chunks",
+            createdAt: "2026-05-11T00:00:01.000Z",
+            value: {
+              chunks: [
+                {
+                  id: "chunk_cursor_pricing",
+                  sourceId: "source_cursor",
+                  ordinal: 0,
+                  text: "Cursor offers paid plans.",
+                  tokenCount: 4
+                }
+              ]
+            }
+          }
+        ]
+      })
+    ).rejects.toThrow("Model fact fact_1 cites unknown source chunk chunk_missing");
+  });
+});
+
+describe("analyst agent", () => {
+  it("can use a model client for schema-validated claim synthesis", async () => {
+    const model = new MockModelClient([
+      {
+        content: JSON.stringify({
+          claims: [
+            {
+              id: "claim_model_1",
+              projectId: "attacker_project",
+              dimension: "pricing",
+              statement: "Cursor monetizes through paid individual and team plans.",
+              factIds: ["fact_1"],
+              confidence: 0.84,
+              kind: "single_competitor"
+            }
+          ]
+        })
+      }
+    ]);
+    const analyst = createAnalystAgent({ model });
+
+    const result = await runAgent(analyst, {
+      projectId: "project_1",
+      artifacts: [
+        {
+          id: "artifact_facts",
+          kind: "facts",
+          createdAt: "2026-05-11T00:00:00.000Z",
+          value: {
+            facts: [
+              {
+                id: "fact_1",
+                projectId: "project_1",
+                competitorId: "Cursor",
+                dimension: "pricing",
+                statement: "Cursor offers paid plans.",
+                sourceChunkIds: ["chunk_1"],
+                confidence: 0.91
+              }
+            ]
+          }
+        }
+      ]
+    });
+
+    expect(result.output.value).toMatchObject({
+      claims: [
+        {
+          id: "claim_1",
+          projectId: "project_1",
+          factIds: ["fact_1"]
+        }
+      ]
+    });
+    expect(model.calls[0]).toMatchObject({
+      task: "synthesize_claims",
+      responseFormat: "json_object"
+    });
+  });
+
+  it("rejects model claims that cite unknown facts", async () => {
+    const analyst = createAnalystAgent({
+      model: new MockModelClient([
+        {
+          content: JSON.stringify({
+            claims: [
+              {
+                dimension: "pricing",
+                statement: "Cursor has paid plans.",
+                factIds: ["fact_missing"],
+                confidence: 0.82,
+                kind: "single_competitor"
+              }
+            ]
+          })
+        }
+      ])
+    });
+
+    await expect(
+      runAgent(analyst, {
+        projectId: "project_1",
+        artifacts: [
+          {
+            id: "artifact_facts",
+            kind: "facts",
+            createdAt: "2026-05-11T00:00:00.000Z",
+            value: {
+              facts: [
+                {
+                  id: "fact_1",
+                  projectId: "project_1",
+                  competitorId: "Cursor",
+                  dimension: "pricing",
+                  statement: "Cursor offers paid plans.",
+                  sourceChunkIds: ["chunk_1"],
+                  confidence: 0.91
+                }
+              ]
+            }
+          }
+        ]
+      })
+    ).rejects.toThrow("Model claim claim_1 cites unknown fact fact_missing");
   });
 });
 

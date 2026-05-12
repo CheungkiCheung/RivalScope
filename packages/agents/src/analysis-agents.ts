@@ -1,13 +1,22 @@
 import type { Claim, Fact, SourceChunk } from "@rivalscope/core";
+import { z } from "zod";
 import {
   getLatestArtifactValue,
   getOptionalLatestArtifactValue
 } from "./artifacts";
 import {
+  generateStructuredObject,
+  type ModelClient
+} from "./model-client";
+import {
   type WorkflowAgent,
   workflowAgentInputSchema,
   workflowAgentOutputSchema
 } from "./workflow-schemas";
+
+export interface AnalysisWorkflowAgentOptions {
+  model?: ModelClient;
+}
 
 export interface ReviewFinding {
   id: string;
@@ -22,16 +31,20 @@ export interface ReviewFinding {
   message: string;
 }
 
-export function createAnalysisWorkflowAgents(): Record<string, WorkflowAgent> {
+export function createAnalysisWorkflowAgents(
+  options: AnalysisWorkflowAgentOptions = {}
+): Record<string, WorkflowAgent> {
   return {
-    extract: createExtractAgent(),
-    analyze: createAnalystAgent(),
+    extract: createExtractAgent(options),
+    analyze: createAnalystAgent(options),
     write: createWriterAgent(),
     critique: createCriticAgent()
   };
 }
 
-export function createExtractAgent(): WorkflowAgent {
+export function createExtractAgent(
+  options: AnalysisWorkflowAgentOptions = {}
+): WorkflowAgent {
   return {
     name: "extract",
     role: "Extracts structured facts from source chunks.",
@@ -44,7 +57,45 @@ export function createExtractAgent(): WorkflowAgent {
       ).chunks;
       const requirements = getOptionalLatestArtifactValue<{
         competitors?: Array<{ name: string }>;
+        requiredDimensions?: string[];
       }>(input.artifacts, "analysis_requirements");
+
+      if (options.model) {
+        const output = await generateStructuredObject({
+          model: options.model,
+          task: "extract_facts",
+          system: [
+            "You extract competitive-intelligence facts from source chunks.",
+            "Return JSON only with a facts array.",
+            "Each fact must cite at least one sourceChunkId from the provided chunks.",
+            "Use competitorId values from the provided competitors when possible."
+          ].join(" "),
+          messages: [
+            {
+              role: "user",
+              content: JSON.stringify({
+                projectId: input.projectId,
+                competitors: requirements?.competitors ?? [],
+                requiredDimensions: requirements?.requiredDimensions ?? [],
+                chunks
+              })
+            }
+          ],
+          schema: modelFactsSchema
+        });
+
+        return {
+          kind: "facts",
+          value: {
+            projectId: input.projectId,
+            facts: normalizeModelFacts({
+              projectId: input.projectId,
+              chunks,
+              facts: output.facts
+            })
+          }
+        };
+      }
 
       const facts: Fact[] = chunks.map((chunk, index) => ({
         id: `fact_${index + 1}`,
@@ -64,7 +115,9 @@ export function createExtractAgent(): WorkflowAgent {
   };
 }
 
-export function createAnalystAgent(): WorkflowAgent {
+export function createAnalystAgent(
+  options: AnalysisWorkflowAgentOptions = {}
+): WorkflowAgent {
   return {
     name: "analyze",
     role: "Turns structured facts into evidence-backed claims.",
@@ -75,6 +128,45 @@ export function createAnalystAgent(): WorkflowAgent {
         input.artifacts,
         "facts"
       ).facts;
+
+      if (options.model) {
+        const requirements = getOptionalLatestArtifactValue<{
+          requiredDimensions?: string[];
+        }>(input.artifacts, "analysis_requirements");
+        const output = await generateStructuredObject({
+          model: options.model,
+          task: "synthesize_claims",
+          system: [
+            "You synthesize evidence-backed competitive-intelligence claims.",
+            "Return JSON only with a claims array.",
+            "Every claim must cite one or more factIds from the provided facts.",
+            "Do not include unsupported claims."
+          ].join(" "),
+          messages: [
+            {
+              role: "user",
+              content: JSON.stringify({
+                projectId: input.projectId,
+                requiredDimensions: requirements?.requiredDimensions ?? [],
+                facts
+              })
+            }
+          ],
+          schema: modelClaimsSchema
+        });
+
+        return {
+          kind: "claims",
+          value: {
+            projectId: input.projectId,
+            claims: normalizeModelClaims({
+              projectId: input.projectId,
+              facts,
+              claims: output.claims
+            })
+          }
+        };
+      }
 
       const claims: Claim[] = facts.map((fact, index) => ({
         id: `claim_${index + 1}`,
@@ -92,6 +184,89 @@ export function createAnalystAgent(): WorkflowAgent {
       };
     }
   };
+}
+
+const modelFactsSchema = z.object({
+  facts: z.array(
+    z.object({
+      competitorId: z.string().min(1),
+      dimension: z.string().min(1),
+      statement: z.string().min(1),
+      sourceChunkIds: z.array(z.string().min(1)).min(1),
+      confidence: z.number().min(0).max(1)
+    })
+  )
+});
+
+const modelClaimsSchema = z.object({
+  claims: z.array(
+    z.object({
+      dimension: z.string().min(1),
+      statement: z.string().min(1),
+      factIds: z.array(z.string().min(1)).min(1),
+      confidence: z.number().min(0).max(1),
+      kind: z.enum(["single_competitor", "comparative", "recommendation"])
+    })
+  )
+});
+
+type ModelFactCandidate = z.infer<typeof modelFactsSchema>["facts"][number];
+type ModelClaimCandidate = z.infer<typeof modelClaimsSchema>["claims"][number];
+
+function normalizeModelFacts(input: {
+  projectId: string;
+  chunks: SourceChunk[];
+  facts: ModelFactCandidate[];
+}): Fact[] {
+  const chunkIds = new Set(input.chunks.map((chunk) => chunk.id));
+
+  return input.facts.map((fact, index) => {
+    const id = `fact_${index + 1}`;
+
+    for (const chunkId of fact.sourceChunkIds) {
+      if (!chunkIds.has(chunkId)) {
+        throw new Error(`Model fact ${id} cites unknown source chunk ${chunkId}`);
+      }
+    }
+
+    return {
+      id,
+      projectId: input.projectId,
+      competitorId: fact.competitorId,
+      dimension: fact.dimension,
+      statement: fact.statement,
+      sourceChunkIds: fact.sourceChunkIds,
+      confidence: fact.confidence
+    };
+  });
+}
+
+function normalizeModelClaims(input: {
+  projectId: string;
+  facts: Fact[];
+  claims: ModelClaimCandidate[];
+}): Claim[] {
+  const factIds = new Set(input.facts.map((fact) => fact.id));
+
+  return input.claims.map((claim, index) => {
+    const id = `claim_${index + 1}`;
+
+    for (const factId of claim.factIds) {
+      if (!factIds.has(factId)) {
+        throw new Error(`Model claim ${id} cites unknown fact ${factId}`);
+      }
+    }
+
+    return {
+      id,
+      projectId: input.projectId,
+      dimension: claim.dimension,
+      statement: claim.statement,
+      factIds: claim.factIds,
+      confidence: claim.confidence,
+      kind: claim.kind
+    };
+  });
 }
 
 export function createWriterAgent(): WorkflowAgent {

@@ -36,6 +36,7 @@ The repository currently contains a complete MVP path:
 - Workflow runner that executes ready DAG nodes.
 - Mock Extract, Analyst, Writer, and Critic agents.
 - Real source-tooling contracts for fixture/Tavily search, URL fetch, HTML-to-text extraction, and stable text chunking.
+- Provider-neutral model gateway with deterministic mock mode, OpenAI-compatible HTTP mode, and Zod-validated structured outputs for Extract and Analyst agents.
 - Source collection persistence through the same Workflow, AgentRun, and ToolCall observability records used by analysis runs.
 - PostgreSQL persistence through Prisma repositories.
 - Next.js web UI for project creation, source preview, DAG execution, report review, evidence inspection, workflow status, and tool-call observability.
@@ -144,6 +145,18 @@ Source collection uses deterministic fixture search by default so local demos an
 RIVALSCOPE_SEARCH_PROVIDER="tavily"
 TAVILY_API_KEY="..."
 ```
+
+Analysis agents use deterministic logic by default. To let Extract and Analyst use a real OpenAI-compatible chat completion endpoint, set:
+
+```bash
+RIVALSCOPE_ANALYSIS_AGENT_MODE="model"
+RIVALSCOPE_MODEL_PROVIDER="openai-compatible"
+OPENAI_COMPATIBLE_API_KEY="..."
+OPENAI_COMPATIBLE_MODEL="gpt-4o-mini"
+OPENAI_COMPATIBLE_BASE_URL="https://api.openai.com/v1"
+```
+
+The model gateway is intentionally OpenAI-compatible rather than SDK-specific. This keeps tests offline while leaving room to connect OpenAI, Volcano Ark, or any compatible endpoint through environment variables. Model-backed Extract and Analyst agents still validate structured output locally: the system assigns fact and claim IDs, and rejects model references to unknown chunks or facts before artifacts enter the evidence chain.
 
 The MVP flow is:
 

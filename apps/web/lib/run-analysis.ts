@@ -15,6 +15,7 @@ import {
   persistAnalysisExecution,
   type PersistAnalysisRepositories
 } from "./analysis-persistence";
+import { createAnalysisAgentOptionsFromEnv } from "./model-client-env";
 
 export async function runAnalysis(projectId: string) {
   const project = await new ProjectRepository(prisma).get(projectId);
@@ -69,11 +70,12 @@ export async function runAnalysis(projectId: string) {
       maxRetries: node.maxRetries
     }))
   });
+  const analysisAgentOptions = createAnalysisAgentOptionsFromEnv(process.env);
 
   const result = await runWorkflow({
     workflow,
     artifacts,
-    agents: createAnalysisWorkflowAgents()
+    agents: createAnalysisWorkflowAgents(analysisAgentOptions)
   });
 
   const workflowRepository = new WorkflowRepository(prisma);
