@@ -90,6 +90,7 @@ Owns the product surface:
 - DAG execution trigger.
 - Report review.
 - Evidence-chain inspection.
+- Trajectory eval summary.
 - Workflow status.
 - Agent run and tool-call observability.
 - Critic findings.

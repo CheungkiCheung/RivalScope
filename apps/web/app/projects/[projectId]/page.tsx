@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { ProjectRepository, prisma } from "@rivalscope/db";
+import { buildProjectEvalSummary } from "../../../lib/project-eval-summary";
 import { runAnalysis } from "../../../lib/run-analysis";
 
 export const dynamic = "force-dynamic";
@@ -68,6 +69,12 @@ export default async function ProjectPage({ params }: ProjectPageProps) {
     section.claims.map((link) => link.claim)
   );
   const allFacts = allClaims.flatMap((claim) => claim.facts.map((link) => link.fact));
+  const evalSummary = buildProjectEvalSummary({
+    requiredDimensions: project.analysisDimensions
+      .filter((dimension) => dimension.required)
+      .map((dimension) => dimension.key),
+    reportSections
+  });
 
   return (
     <main className="shell">
@@ -103,6 +110,10 @@ export default async function ProjectPage({ params }: ProjectPageProps) {
         <div className="metric">
           <span className="metric-label">Findings</span>
           <strong>{latestFindings.length}</strong>
+        </div>
+        <div className="metric">
+          <span className="metric-label">Eval Score</span>
+          <strong>{evalSummary.score ?? "—"}</strong>
         </div>
         <div className="metric">
           <span className="metric-label">Model Calls</span>
@@ -167,6 +178,60 @@ export default async function ProjectPage({ params }: ProjectPageProps) {
         </section>
 
         <aside className="grid">
+          <section className="card">
+            <h3>Trajectory Eval</h3>
+            {evalSummary.status === "not_started" ? (
+              <p className="muted">No report trajectory to evaluate yet.</p>
+            ) : (
+              <div className="eval-panel">
+                <div className="eval-score">
+                  <span className="metric-label">Score</span>
+                  <strong>{evalSummary.score}</strong>
+                </div>
+                {evalSummary.metrics ? (
+                  <div className="eval-metrics">
+                    <MetricRatio
+                      label="Evidence"
+                      value={evalSummary.metrics.evidenceCoverage}
+                    />
+                    <MetricRatio
+                      label="Citations"
+                      value={evalSummary.metrics.citationValidity}
+                    />
+                    <MetricRatio
+                      label="Dimensions"
+                      value={evalSummary.metrics.requiredDimensionCoverage}
+                    />
+                  </div>
+                ) : null}
+                {evalSummary.findings.length === 0 ? (
+                  <p className="muted">No trajectory findings.</p>
+                ) : (
+                  <div className="list">
+                    {evalSummary.findings.map((finding) => (
+                      <div
+                        className="item compact-item"
+                        key={`${finding.category}-${finding.message}`}
+                      >
+                        <div className="item-head">
+                          <strong>{finding.category}</strong>
+                          <span
+                            className={`status ${
+                              finding.severity === "high" ? "bad" : "warn"
+                            }`}
+                          >
+                            {finding.severity}
+                          </span>
+                        </div>
+                        <p className="muted">{finding.message}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </section>
+
           <section className="card">
             <h3>Workflow run</h3>
             {!latestWorkflow ? (
@@ -375,6 +440,15 @@ function renderTokenPill(usage: unknown) {
   }
 
   return null;
+}
+
+function MetricRatio({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="trace-summary">
+      <span className="metric-label">{label}</span>
+      <strong>{Math.round(value * 100)}%</strong>
+    </div>
+  );
 }
 
 function statusClass(status: string) {

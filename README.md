@@ -38,7 +38,7 @@ The repository currently contains a complete MVP path:
 - Real source-tooling contracts for fixture/Tavily search, URL fetch, HTML-to-text extraction, and stable text chunking.
 - Provider-neutral model gateway with deterministic mock mode, OpenAI-compatible HTTP mode, Zod-validated structured outputs for Extract and Analyst agents, and first-class model-call tracing.
 - Report section validation that rejects unknown claim references before report artifacts enter the workflow.
-- Offline trajectory evals for evidence coverage, citation validity, required-dimension coverage, and golden-case regression summaries.
+- Offline trajectory evals for evidence coverage, citation validity, required-dimension coverage, golden-case regression summaries, and project-page trajectory scoring.
 - Source collection persistence through the same Workflow, AgentRun, and ToolCall observability records used by analysis runs.
 - PostgreSQL persistence through Prisma repositories.
 - Next.js web UI for project creation, source preview, DAG execution, report review, evidence inspection, workflow status, tool-call observability, and model-call observability.
@@ -51,7 +51,7 @@ The repository currently contains a complete MVP path:
 apps/
   web/
     app/                 # Next.js App Router pages and server actions
-    lib/                 # Analysis orchestration and persistence mapping
+    lib/                 # Analysis orchestration, persistence mapping, and project eval summaries
 packages/
   core/
     src/workflow.ts      # DAG workflow domain model and immutable state transitions
@@ -73,7 +73,7 @@ packages/
     src/index.ts         # Placeholder for concrete external tools
 ```
 
-Planned additions include golden eval datasets, report-quality graders, and later an optional worker process for long-running production workflows.
+Planned additions include report-quality graders, richer lineage views, and later an optional worker process for long-running production workflows.
 
 ## Architecture Direction
 

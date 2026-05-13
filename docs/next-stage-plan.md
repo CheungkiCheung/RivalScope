@@ -131,6 +131,8 @@ Acceptance criteria:
 
 Goal: make the workflow trace understandable to a human reviewer.
 
+Status: first eval observability surface implemented. The project detail page now computes a trajectory eval summary from persisted report-linked claims and facts, then renders score, evidence/citation/dimension metrics, and deterministic eval findings without adding database schema.
+
 Tasks:
 
 1. Add workflow timeline UI.
@@ -139,7 +141,7 @@ Tasks:
 4. Add sanitized tool call detail UI.
 5. Add artifact lineage view.
 6. Link Critic findings to the exact claim, fact, or report section.
-7. Add eval result page for regression review.
+7. Done for first pass: Add eval result surface for trajectory regression review.
 
 Acceptance criteria:
 
@@ -147,6 +149,7 @@ Acceptance criteria:
 - Every final claim can be traced back to source chunks.
 - Every failed node has visible error context.
 - Critic findings are actionable from the UI.
+- Trajectory eval score and findings are visible next to workflow traces.
 
 ## Deferred Work
 

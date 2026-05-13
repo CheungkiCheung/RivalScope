@@ -77,7 +77,7 @@ textarea {
 .metrics {
   display: grid;
   gap: 12px;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
   margin-bottom: 16px;
 }
 
@@ -224,6 +224,40 @@ textarea {
   font-size: 18px;
 }
 
+.eval-panel {
+  display: grid;
+  gap: 14px;
+}
+
+.eval-score {
+  align-items: center;
+  background: #f8fafc;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  display: flex;
+  justify-content: space-between;
+  padding: 14px;
+}
+
+.eval-score strong {
+  font-size: 32px;
+  line-height: 1;
+}
+
+.eval-metrics {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.compact-item {
+  padding: 12px;
+}
+
+.compact-item p {
+  margin: 0;
+}
+
 .pill-row {
   display: flex;
   flex-wrap: wrap;
@@ -335,6 +369,10 @@ textarea {
 }
 
 @media (max-width: 560px) {
+  .eval-metrics {
+    grid-template-columns: 1fr;
+  }
+
   .metrics {
     grid-template-columns: 1fr;
   }
