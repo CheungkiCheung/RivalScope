@@ -1,0 +1,146 @@
+[
+  {
+    "id": "agentic-devtools-healthy",
+    "name": "Agentic devtools healthy evidence chain",
+    "minScore": 95,
+    "expectedScore": 100,
+    "expectedFindingCategories": [],
+    "requiredDimensions": [
+      "positioning",
+      "developer_experience",
+      "pricing"
+    ],
+    "facts": [
+      {
+        "id": "fact_positioning_cursor",
+        "projectId": "project_agentic_devtools",
+        "competitorId": "competitor_cursor",
+        "dimension": "positioning",
+        "statement": "Cursor positions itself as an AI code editor.",
+        "sourceChunkIds": [
+          "chunk_cursor_home_1"
+        ],
+        "confidence": 0.9
+      },
+      {
+        "id": "fact_dx_codex",
+        "projectId": "project_agentic_devtools",
+        "competitorId": "competitor_codex",
+        "dimension": "developer_experience",
+        "statement": "Codex supports agentic implementation workflows from a local coding environment.",
+        "sourceChunkIds": [
+          "chunk_codex_docs_1"
+        ],
+        "confidence": 0.86
+      },
+      {
+        "id": "fact_pricing_cursor",
+        "projectId": "project_agentic_devtools",
+        "competitorId": "competitor_cursor",
+        "dimension": "pricing",
+        "statement": "Cursor offers paid plans for professional users.",
+        "sourceChunkIds": [
+          "chunk_cursor_pricing_1"
+        ],
+        "confidence": 0.88
+      }
+    ],
+    "claims": [
+      {
+        "id": "claim_positioning",
+        "projectId": "project_agentic_devtools",
+        "dimension": "positioning",
+        "statement": "Cursor competes primarily through an AI-editor positioning.",
+        "factIds": [
+          "fact_positioning_cursor"
+        ],
+        "confidence": 0.84,
+        "kind": "single_competitor"
+      },
+      {
+        "id": "claim_dx",
+        "projectId": "project_agentic_devtools",
+        "dimension": "developer_experience",
+        "statement": "Codex emphasizes agentic developer workflows in the local coding loop.",
+        "factIds": [
+          "fact_dx_codex"
+        ],
+        "confidence": 0.82,
+        "kind": "single_competitor"
+      },
+      {
+        "id": "claim_pricing",
+        "projectId": "project_agentic_devtools",
+        "dimension": "pricing",
+        "statement": "Cursor monetizes through paid professional plans.",
+        "factIds": [
+          "fact_pricing_cursor"
+        ],
+        "confidence": 0.82,
+        "kind": "single_competitor"
+      }
+    ]
+  },
+  {
+    "id": "agentic-devtools-broken",
+    "name": "Agentic devtools broken evidence chain",
+    "minScore": 20,
+    "expectedScore": 39,
+    "expectedFindingCategories": [
+      "missing_dimension",
+      "unknown_fact",
+      "unsupported_claim"
+    ],
+    "requiredDimensions": [
+      "positioning",
+      "developer_experience",
+      "pricing"
+    ],
+    "facts": [
+      {
+        "id": "fact_positioning_cursor",
+        "projectId": "project_agentic_devtools",
+        "competitorId": "competitor_cursor",
+        "dimension": "positioning",
+        "statement": "Cursor positions itself as an AI code editor.",
+        "sourceChunkIds": [
+          "chunk_cursor_home_1"
+        ],
+        "confidence": 0.9
+      }
+    ],
+    "claims": [
+      {
+        "id": "claim_positioning",
+        "projectId": "project_agentic_devtools",
+        "dimension": "positioning",
+        "statement": "Cursor competes primarily through an AI-editor positioning.",
+        "factIds": [
+          "fact_positioning_cursor"
+        ],
+        "confidence": 0.84,
+        "kind": "single_competitor"
+      },
+      {
+        "id": "claim_dx",
+        "projectId": "project_agentic_devtools",
+        "dimension": "developer_experience",
+        "statement": "Codex provides a mature autonomous engineering workflow.",
+        "factIds": [
+          "fact_missing_dx"
+        ],
+        "confidence": 0.7,
+        "kind": "single_competitor"
+      },
+      {
+        "id": "claim_pricing",
+        "projectId": "project_agentic_devtools",
+        "dimension": "pricing",
+        "statement": "Cursor pricing is cheaper than alternatives.",
+        "factIds": [],
+        "confidence": 0.61,
+        "kind": "comparative"
+      }
+    ]
+  }
+]

@@ -11,11 +11,13 @@
   "scripts": {
     "test": "vitest run",
     "test:watch": "vitest",
+    "eval:golden": "npm run eval:golden --workspace @rivalscope/evals",
     "typecheck": "tsc --noEmit",
     "build": "npm run build --workspaces --if-present"
   },
   "devDependencies": {
     "@types/node": "^22.15.3",
+    "tsx": "^4.21.0",
     "typescript": "^5.8.3",
     "vitest": "^3.1.2",
     "zod": "^3.24.4"

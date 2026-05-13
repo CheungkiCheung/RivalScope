@@ -108,24 +108,24 @@ Acceptance criteria:
 
 Goal: measure the quality of both report output and workflow behavior.
 
-Status: first evaluator implemented. `packages/evals` now provides an offline `evaluateEvidenceTrajectory` function that scores evidence coverage, citation validity, and required-dimension coverage, with deterministic findings for unsupported claims, unknown facts, and missing dimensions.
+Status: first evaluator and local golden runner implemented. `packages/evals` now provides an offline `evaluateEvidenceTrajectory` function that scores evidence coverage, citation validity, and required-dimension coverage, with deterministic findings for unsupported claims, unknown facts, and missing dimensions. `npm run eval:golden` runs positive and negative golden trajectories without network or model calls and emits a JSON summary for CI or demo review.
 
 Tasks:
 
 1. Done: Create `packages/evals`.
-2. Pending: Add golden projects with small fixture sources.
+2. Done for first pass: Add golden projects with small fixture trajectories.
 3. Done: Add evidence-chain metrics.
 4. Done: Add citation-validity metrics.
 5. Done for first pass: Add deterministic tests for unsupported claims, unknown facts, and missing dimensions.
 6. Add report-quality grading hooks.
-7. Add a command that runs evals locally and outputs a summary.
+7. Done for first pass: Add a command that runs evals locally and outputs a summary.
 
 Acceptance criteria:
 
 - Evals run without network by default.
 - The suite catches broken evidence references.
 - The suite catches report sections without cited claims.
-- The suite reports final-output and trajectory scores separately.
+- The suite reports trajectory scores and deterministic findings; final-output report-quality grading remains pending.
 
 ## Stage 5: Observability Upgrade
 

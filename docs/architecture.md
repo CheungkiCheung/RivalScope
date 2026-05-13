@@ -67,16 +67,18 @@ Owns the relational persistence model:
 - Workflows, workflow nodes, agent runs, tool calls, and artifacts.
 - Human feedback for later evaluation loops.
 
-### `@rivalscope/evals` planned
+### `@rivalscope/evals`
 
 Owns repeatable quality measurement:
 
-- Golden projects and expected outputs.
+- Golden trajectories and expected eval behavior.
 - Trajectory-level assertions for tool usage and artifact flow.
 - Evidence coverage metrics.
 - Citation validity metrics.
-- Report quality graders.
-- Critic effectiveness metrics.
+- Required-dimension coverage metrics.
+- Local JSON summaries for CI and demo review.
+- Planned: report quality graders.
+- Planned: Critic effectiveness metrics.
 
 This package should evaluate both the final report and the path taken to produce it.
 
