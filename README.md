@@ -20,6 +20,21 @@ Source -> SourceChunk -> Fact -> Claim -> ReportSection
 
 This chain is the main guardrail against hallucinated reports.
 
+## Execution Harness
+
+RivalScope is now managed by the Top 3 execution harness in `docs/top3-execution-harness.md`.
+
+That document is the source of truth for:
+
+- Competition positioning.
+- Phase order.
+- North-star metrics.
+- Claim Trust Score direction.
+- Verification gates.
+- Deferred work.
+
+Future development should optimize for trusted competitive intelligence, not generic AI report generation.
+
 ## Current Status
 
 The repository currently contains a complete MVP path:

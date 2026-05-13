@@ -13,6 +13,14 @@ This plan turns the MVP into a more production-style AI Agent engineering projec
 
 The next stage should make RivalScope look less like a mock demo and more like a real competitive-intelligence agent system that can be explained in interviews and evaluated in code.
 
+This plan is now governed by `docs/top3-execution-harness.md`. If this document and the harness disagree, follow the harness unless the user explicitly changes the competition strategy.
+
+The immediate next milestone is:
+
+```text
+Claim Trust Score + Claim Trust Graph
+```
+
 ## Research Summary
 
 The strongest external pattern is consistent across major agent systems:
