@@ -389,6 +389,8 @@ Phase 0.5 completion gate:
 
 Goal: create the metric and UI base for all future optimization.
 
+Status: implemented for deterministic scoring and first web surface.
+
 Required deliverables:
 
 - `evaluateClaimTrust` in `@rivalscope/evals`.
@@ -427,6 +429,8 @@ Phase 1 completion gate:
 - Duplicate facts/chunks do not inflate trust.
 - Trust scoring is covered by deterministic unit tests.
 - The same page shows which agent created the claim path and which schema dimension it belongs to.
+
+Current limitation: Claim Trust v1 is deterministic and structural. Semantic support checking, critic-impact penalties, persisted trust snapshots, and repair-loop deltas arrive in later phases.
 
 ### Phase 2: Structured Critic Targeting
 
@@ -614,10 +618,10 @@ These are not priorities until Claim Trust Graph is in the product:
 
 ## Next Immediate Milestone
 
-The next implementation milestone is Phase 1:
+The next implementation milestone is Phase 2:
 
 ```text
-Claim Trust Score + Claim Trust Graph + Thin Agent Trace
+Structured Critic Targeting
 ```
 
-Start with deterministic eval code and tests in `packages/evals`, then build the web summary, Claim Trust Graph UI, and minimal Agent Collaboration Trace. Do not start the full repair loop or routed DAG until claim trust is visible and tested.
+Start by making critic findings target exact claims, facts, sections, dimensions, or workflow gaps. Then wire those targeted findings into Claim Trust penalties and UI navigation.

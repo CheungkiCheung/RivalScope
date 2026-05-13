@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { ProjectRepository, prisma } from "@rivalscope/db";
+import { buildProjectClaimTrustSummary } from "../../../lib/project-claim-trust";
 import { buildProjectEvalSummary } from "../../../lib/project-eval-summary";
 import { runAnalysis } from "../../../lib/run-analysis";
 
@@ -75,6 +76,10 @@ export default async function ProjectPage({ params }: ProjectPageProps) {
       .map((dimension) => dimension.key),
     reportSections
   });
+  const claimTrustSummary = buildProjectClaimTrustSummary({
+    sources: project.sources,
+    reportSections
+  });
 
   return (
     <main className="shell">
@@ -114,6 +119,10 @@ export default async function ProjectPage({ params }: ProjectPageProps) {
         <div className="metric">
           <span className="metric-label">Eval Score</span>
           <strong>{evalSummary.score ?? "—"}</strong>
+        </div>
+        <div className="metric">
+          <span className="metric-label">Claim Trust</span>
+          <strong>{claimTrustSummary.averageScore ?? "—"}</strong>
         </div>
         <div className="metric">
           <span className="metric-label">Model Calls</span>
@@ -233,7 +242,65 @@ export default async function ProjectPage({ params }: ProjectPageProps) {
           </section>
 
           <section className="card">
-            <h3>Workflow run</h3>
+            <h3>Claim Trust Graph</h3>
+            {claimTrustSummary.status === "not_started" ? (
+              <p className="muted">No claims to score yet.</p>
+            ) : (
+              <div className="list">
+                {claimTrustSummary.nodes.map((node) => (
+                  <div className="item trust-node" key={node.claimId}>
+                    <div className="item-head">
+                      <strong>{node.dimension}</strong>
+                      <span className={`status ${riskClass(node.riskLevel)}`}>
+                        {node.score} · {node.riskLevel}
+                      </span>
+                    </div>
+                    <p>{node.statement}</p>
+                    <span className="muted">{node.sectionTitle}</span>
+                    <div className="trust-chain">
+                      <span>{node.facts.length} facts</span>
+                      <span>{node.chunks.length} chunks</span>
+                      <span>{node.sources.length} sources</span>
+                    </div>
+                    <div className="evidence-facts">
+                      {node.facts.map((fact) => (
+                        <div className="evidence-fact" key={fact.id}>
+                          <span className="pill">{fact.dimension}</span>
+                          <p>{fact.statement}</p>
+                          <span className="muted">
+                            {fact.competitorName} · confidence{" "}
+                            {Math.round(fact.confidence * 100)}%
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="pill-row">
+                      {node.sources.map((source) => (
+                        <span className="pill" key={source.id}>
+                          {source.title}
+                        </span>
+                      ))}
+                    </div>
+                    {node.penalties.length > 0 ? (
+                      <div className="list compact-list">
+                        {node.penalties.map((penalty) => (
+                          <div className="item compact-item" key={penalty.message}>
+                            <strong>{penalty.code}</strong>
+                            <p className="muted">
+                              -{penalty.points}: {penalty.message}
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                    ) : null}
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+
+          <section className="card">
+            <h3>Agent Collaboration Trace</h3>
             {!latestWorkflow ? (
               <p className="muted">No workflow run yet.</p>
             ) : (
@@ -258,6 +325,10 @@ export default async function ProjectPage({ params }: ProjectPageProps) {
                           </span>
                           <span className="muted">tool calls {latestRun.toolCalls.length}</span>
                           <span className="muted">model calls {latestRun.modelCalls.length}</span>
+                          <span className="muted">
+                            handoff {node.inputArtifactIds.length} in /{" "}
+                            {node.outputArtifactIds.length} out
+                          </span>
                         </div>
                       ) : (
                         <span className="muted">No agent run recorded.</span>
@@ -461,4 +532,16 @@ function statusClass(status: string) {
   }
 
   return "warn";
+}
+
+function riskClass(riskLevel: string) {
+  if (riskLevel === "low") {
+    return "ok";
+  }
+
+  if (riskLevel === "medium") {
+    return "warn";
+  }
+
+  return "bad";
 }

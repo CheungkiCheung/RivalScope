@@ -151,6 +151,8 @@ Acceptance criteria:
 
 Goal: add the first judge-visible trust surface and connect it to agent collaboration.
 
+Status: implemented for deterministic scoring and first web surface.
+
 Tasks:
 
 1. Add deterministic `evaluateClaimTrust` in `@rivalscope/evals`.
@@ -170,6 +172,8 @@ Acceptance criteria:
 - Claims belong to schema dimensions.
 - The page shows which agent path produced the claim.
 - The metric is deterministic and covered by tests.
+
+Current limitation: Claim Trust v1 is deterministic and structural. Semantic support checking, critic-impact penalties, persisted trust snapshots, and repair-loop deltas arrive in later phases.
 
 ## Updated Stage 2: Structured Critic Targeting
 
@@ -344,8 +348,8 @@ These are intentionally not part of the next stage:
 2. Done for MVP path: tool-call persistence hardening and UI.
 3. Done for MVP path: model gateway.
 4. Done for MVP path: optional real Extract and Analyst agents.
-5. Next: Claim Trust Graph and Thin Agent Trace.
-6. Next after trust graph: Structured Critic Targeting.
+5. Done for deterministic first surface: Claim Trust Graph and Thin Agent Trace.
+6. Next: Structured Critic Targeting.
 7. Next after targeted critic: Eval-Guided Repair Loop.
 8. Later: full Routed Research DAG.
 9. Later: delivery and demo hardening.

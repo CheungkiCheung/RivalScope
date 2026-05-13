@@ -258,6 +258,29 @@ textarea {
   margin: 0;
 }
 
+.trust-node {
+  gap: 12px;
+}
+
+.trust-chain {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.trust-chain span {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--muted);
+  font-size: 12px;
+  padding: 8px;
+  text-align: center;
+}
+
+.compact-list {
+  gap: 8px;
+}
+
 .pill-row {
   display: flex;
   flex-wrap: wrap;

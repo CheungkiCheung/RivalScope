@@ -1,0 +1,251 @@
+import type { Claim, Fact, Source, SourceChunk } from "@rivalscope/core";
+
+export type ClaimTrustRiskLevel = "low" | "medium" | "high";
+
+export type ClaimTrustPenaltyCode =
+  | "no_cited_facts"
+  | "unknown_fact"
+  | "fact_without_source_chunks"
+  | "unknown_source_chunk"
+  | "chunk_without_source"
+  | "low_fact_confidence"
+  | "single_source";
+
+export interface ClaimTrustPenalty {
+  code: ClaimTrustPenaltyCode;
+  points: number;
+  message: string;
+}
+
+export interface ClaimTrustMetrics {
+  citationValidity: number;
+  evidenceStrength: number;
+  sourceTraceability: number;
+  factConfidence: number;
+  sourceDiversity: number;
+  citedFactCount: number;
+  validFactCount: number;
+  sourceChunkCount: number;
+  sourceCount: number;
+}
+
+export interface ClaimTrustResult {
+  claimId: string;
+  dimension: string;
+  score: number;
+  riskLevel: ClaimTrustRiskLevel;
+  metrics: ClaimTrustMetrics;
+  penalties: ClaimTrustPenalty[];
+  reasons: string[];
+  factIds: string[];
+  sourceChunkIds: string[];
+  sourceIds: string[];
+}
+
+export interface EvaluateClaimTrustInput {
+  claim: Claim;
+  facts: Fact[];
+  chunks: SourceChunk[];
+  sources: Source[];
+}
+
+export function evaluateClaimTrust(input: EvaluateClaimTrustInput): ClaimTrustResult {
+  const factById = new Map(input.facts.map((fact) => [fact.id, fact]));
+  const chunkById = new Map(input.chunks.map((chunk) => [chunk.id, chunk]));
+  const sourceById = new Map(input.sources.map((source) => [source.id, source]));
+  const citedFactIds = unique(input.claim.factIds);
+  const validFacts = citedFactIds
+    .map((factId) => factById.get(factId))
+    .filter((fact): fact is Fact => fact !== undefined);
+  const validFactIds = validFacts.map((fact) => fact.id);
+  const sourceChunkIds = unique(validFacts.flatMap((fact) => fact.sourceChunkIds));
+  const validChunks = sourceChunkIds
+    .map((chunkId) => chunkById.get(chunkId))
+    .filter((chunk): chunk is SourceChunk => chunk !== undefined);
+  const sourceIds = unique(validChunks.map((chunk) => chunk.sourceId));
+  const validSources = sourceIds
+    .map((sourceId) => sourceById.get(sourceId))
+    .filter((source): source is Source => source !== undefined);
+  const penalties = buildPenalties({
+    claim: input.claim,
+    citedFactIds,
+    validFacts,
+    validChunks,
+    validSources,
+    factById,
+    chunkById,
+    sourceById
+  });
+  const metrics: ClaimTrustMetrics = {
+    citationValidity: ratio(validFactIds.length, citedFactIds.length),
+    evidenceStrength: Math.min(1, validFactIds.length / 2),
+    sourceTraceability: ratio(validSources.length, sourceIds.length),
+    factConfidence:
+      validFacts.length === 0
+        ? 0
+        : average(validFacts.map((fact) => clamp01(fact.confidence))),
+    sourceDiversity: Math.min(1, validSources.length / 2),
+    citedFactCount: citedFactIds.length,
+    validFactCount: validFactIds.length,
+    sourceChunkCount: validChunks.length,
+    sourceCount: validSources.length
+  };
+  const weightedScore =
+    metrics.citationValidity * 30 +
+    metrics.evidenceStrength * 25 +
+    metrics.sourceTraceability * 20 +
+    metrics.factConfidence * 15 +
+    metrics.sourceDiversity * 10;
+  const penaltyPoints = penalties.reduce((total, penalty) => total + penalty.points, 0);
+  const score = Math.max(0, Math.min(100, Math.round(weightedScore - penaltyPoints)));
+
+  return {
+    claimId: input.claim.id,
+    dimension: input.claim.dimension,
+    score,
+    riskLevel: toRiskLevel(score),
+    metrics,
+    penalties,
+    reasons: buildReasons(metrics, penalties),
+    factIds: validFactIds,
+    sourceChunkIds: validChunks.map((chunk) => chunk.id),
+    sourceIds: validSources.map((source) => source.id)
+  };
+}
+
+function buildPenalties(input: {
+  claim: Claim;
+  citedFactIds: string[];
+  validFacts: Fact[];
+  validChunks: SourceChunk[];
+  validSources: Source[];
+  factById: Map<string, Fact>;
+  chunkById: Map<string, SourceChunk>;
+  sourceById: Map<string, Source>;
+}): ClaimTrustPenalty[] {
+  const penalties: ClaimTrustPenalty[] = [];
+
+  if (input.citedFactIds.length === 0) {
+    penalties.push({
+      code: "no_cited_facts",
+      points: 35,
+      message: `Claim ${input.claim.id} has no cited facts.`
+    });
+  }
+
+  for (const factId of input.citedFactIds) {
+    if (!input.factById.has(factId)) {
+      penalties.push({
+        code: "unknown_fact",
+        points: 30,
+        message: `Claim ${input.claim.id} cites unknown fact ${factId}.`
+      });
+    }
+  }
+
+  for (const fact of input.validFacts) {
+    if (fact.sourceChunkIds.length === 0) {
+      penalties.push({
+        code: "fact_without_source_chunks",
+        points: 25,
+        message: `Fact ${fact.id} has no source chunks.`
+      });
+    }
+
+    for (const chunkId of unique(fact.sourceChunkIds)) {
+      if (!input.chunkById.has(chunkId)) {
+        penalties.push({
+          code: "unknown_source_chunk",
+          points: 20,
+          message: `Fact ${fact.id} cites unknown source chunk ${chunkId}.`
+        });
+      }
+    }
+  }
+
+  for (const chunk of input.validChunks) {
+    if (!input.sourceById.has(chunk.sourceId)) {
+      penalties.push({
+        code: "chunk_without_source",
+        points: 20,
+        message: `Chunk ${chunk.id} cites unknown source ${chunk.sourceId}.`
+      });
+    }
+  }
+
+  const averageConfidence =
+    input.validFacts.length === 0
+      ? 0
+      : average(input.validFacts.map((fact) => clamp01(fact.confidence)));
+
+  if (input.validFacts.length > 0 && averageConfidence < 0.7) {
+    penalties.push({
+      code: "low_fact_confidence",
+      points: 10,
+      message: `Claim ${input.claim.id} has average fact confidence below 70%.`
+    });
+  }
+
+  if (input.validFacts.length > 0 && input.validSources.length === 1) {
+    penalties.push({
+      code: "single_source",
+      points: 8,
+      message: `Claim ${input.claim.id} is supported by only one unique source.`
+    });
+  }
+
+  return penalties;
+}
+
+function buildReasons(
+  metrics: ClaimTrustMetrics,
+  penalties: ClaimTrustPenalty[]
+): string[] {
+  const reasons = [
+    `${metrics.validFactCount}/${metrics.citedFactCount} cited facts are valid.`,
+    `${metrics.sourceChunkCount} source chunks trace to ${metrics.sourceCount} sources.`,
+    `Average fact confidence is ${Math.round(metrics.factConfidence * 100)}%.`
+  ];
+
+  if (penalties.length === 0) {
+    return [...reasons, "No trust penalties were applied."];
+  }
+
+  return [...reasons, ...penalties.map((penalty) => penalty.message)];
+}
+
+function toRiskLevel(score: number): ClaimTrustRiskLevel {
+  if (score >= 85) {
+    return "low";
+  }
+
+  if (score >= 65) {
+    return "medium";
+  }
+
+  return "high";
+}
+
+function unique(values: string[]): string[] {
+  return [...new Set(values)];
+}
+
+function ratio(numerator: number, denominator: number): number {
+  if (denominator === 0) {
+    return 0;
+  }
+
+  return numerator / denominator;
+}
+
+function average(values: number[]): number {
+  if (values.length === 0) {
+    return 0;
+  }
+
+  return values.reduce((total, value) => total + value, 0) / values.length;
+}
+
+function clamp01(value: number): number {
+  return Math.max(0, Math.min(1, value));
+}
