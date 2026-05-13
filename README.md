@@ -37,6 +37,8 @@ The repository currently contains a complete MVP path:
 - Mock Extract, Analyst, Writer, and Critic agents.
 - Real source-tooling contracts for fixture/Tavily search, URL fetch, HTML-to-text extraction, and stable text chunking.
 - Provider-neutral model gateway with deterministic mock mode, OpenAI-compatible HTTP mode, Zod-validated structured outputs for Extract and Analyst agents, and first-class model-call tracing.
+- Report section validation that rejects unknown claim references before report artifacts enter the workflow.
+- Offline trajectory evals for evidence coverage, citation validity, and required-dimension coverage.
 - Source collection persistence through the same Workflow, AgentRun, and ToolCall observability records used by analysis runs.
 - PostgreSQL persistence through Prisma repositories.
 - Next.js web UI for project creation, source preview, DAG execution, report review, evidence inspection, workflow status, tool-call observability, and model-call observability.
@@ -63,11 +65,13 @@ packages/
   db/
     prisma/schema.prisma # PostgreSQL relational model
     src/repositories.ts  # Project, workflow, artifact, and intelligence repositories
+  evals/
+    src/trajectory-eval.ts # Offline evidence trajectory scoring
   tools/
     src/index.ts         # Placeholder for concrete external tools
 ```
 
-Planned additions include `packages/evals` for trajectory evaluation and, later, an optional worker process for long-running production workflows.
+Planned additions include golden eval datasets, report-quality graders, and later an optional worker process for long-running production workflows.
 
 ## Architecture Direction
 

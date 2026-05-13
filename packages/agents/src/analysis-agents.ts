@@ -36,6 +36,17 @@ export interface ReviewFinding {
   message: string;
 }
 
+export interface ReportSectionDraft {
+  id: string;
+  title: string;
+  body: string;
+  claimIds: string[];
+}
+
+export interface WriterAgentOptions {
+  buildSections?(claims: Claim[]): ReportSectionDraft[];
+}
+
 export function createAnalysisWorkflowAgents(
   options: AnalysisWorkflowAgentOptions = {}
 ): Record<string, WorkflowAgent> {
@@ -326,7 +337,7 @@ function normalizeModelClaims(input: {
   });
 }
 
-export function createWriterAgent(): WorkflowAgent {
+export function createWriterAgent(options: WriterAgentOptions = {}): WorkflowAgent {
   return {
     name: "write",
     role: "Composes a structured report from evidence-backed claims.",
@@ -337,24 +348,46 @@ export function createWriterAgent(): WorkflowAgent {
         input.artifacts,
         "claims"
       ).claims;
+      const sections =
+        options.buildSections?.(claims) ??
+        [
+          {
+            id: "section_summary",
+            title: "Executive Summary",
+            body: claims.map((claim) => claim.statement).join("\n"),
+            claimIds: claims.map((claim) => claim.id)
+          }
+        ];
+
+      assertReportSectionsCiteKnownClaims(sections, claims);
 
       return {
         kind: "report",
         value: {
           projectId: input.projectId,
           title: "Competitive Intelligence Report",
-          sections: [
-            {
-              id: "section_summary",
-              title: "Executive Summary",
-              body: claims.map((claim) => claim.statement).join("\n"),
-              claimIds: claims.map((claim) => claim.id)
-            }
-          ]
+          sections
         }
       };
     }
   };
+}
+
+function assertReportSectionsCiteKnownClaims(
+  sections: ReportSectionDraft[],
+  claims: Claim[]
+): void {
+  const claimIds = new Set(claims.map((claim) => claim.id));
+
+  for (const section of sections) {
+    for (const claimId of section.claimIds) {
+      if (!claimIds.has(claimId)) {
+        throw new Error(
+          `Report section ${section.id} cites unknown claim ${claimId}`
+        );
+      }
+    }
+  }
 }
 
 export function createCriticAgent(): WorkflowAgent {

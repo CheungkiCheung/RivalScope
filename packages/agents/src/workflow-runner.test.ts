@@ -4,7 +4,8 @@ import {
   createAnalysisWorkflowAgents,
   createAnalystAgent,
   createCriticAgent,
-  createExtractAgent
+  createExtractAgent,
+  createWriterAgent
 } from "./analysis-agents";
 import { runAgent } from "./agent";
 import { InMemoryArtifactStore } from "./artifacts";
@@ -630,6 +631,49 @@ describe("critic agent", () => {
       "section_summary has no cited claims"
     );
     expect(JSON.stringify(output.value)).toContain("low confidence");
+  });
+});
+
+describe("writer agent", () => {
+  it("rejects report sections that cite unknown claims before emitting a report artifact", async () => {
+    const writer = createWriterAgent({
+      buildSections: () => [
+        {
+          id: "section_summary",
+          title: "Executive Summary",
+          body: "Cursor has paid plans.",
+          claimIds: ["claim_missing"]
+        }
+      ]
+    });
+
+    await expect(
+      runAgent(writer, {
+        projectId: "project_1",
+        artifacts: [
+          {
+            id: "artifact_claims",
+            kind: "claims",
+            createdAt: "2026-05-11T00:00:02.000Z",
+            value: {
+              claims: [
+                {
+                  id: "claim_1",
+                  projectId: "project_1",
+                  dimension: "pricing",
+                  statement: "Cursor has paid plans.",
+                  factIds: ["fact_1"],
+                  confidence: 0.84,
+                  kind: "single_competitor"
+                }
+              ]
+            }
+          }
+        ]
+      })
+    ).rejects.toThrow(
+      "Report section section_summary cites unknown claim claim_missing"
+    );
   });
 });
 

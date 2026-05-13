@@ -60,7 +60,7 @@ Acceptance criteria:
 
 Goal: make LLM usage replaceable and testable without coupling the workflow to one provider.
 
-Status: implemented for the MVP path. The project now has a provider-neutral `ModelClient`, deterministic `MockModelClient`, OpenAI-compatible HTTP adapter behind environment variables, Zod structured-output validation, reference validation for generated facts/claims, project competitor allowlist validation for generated facts, first-class model call observability, and optional model-backed Extract and Analyst agents while preserving the offline deterministic default.
+Status: implemented for the MVP path. The project now has a provider-neutral `ModelClient`, deterministic `MockModelClient`, OpenAI-compatible HTTP adapter behind environment variables, Zod structured-output validation, reference validation for generated facts/claims/report sections, project competitor allowlist validation for generated facts, first-class model call observability, and optional model-backed Extract and Analyst agents while preserving the offline deterministic default.
 
 Tasks:
 
@@ -78,10 +78,10 @@ Acceptance criteria:
 - Real LLM agents produce schema-validated facts and claims.
 - Invalid model output is rejected and recorded as an agent failure.
 - Model calls are persisted with provider/task/status/error context and token usage when available.
+- Report sections that cite unknown claims are rejected before report artifacts are emitted.
 
 Remaining hardening:
 
-- Add schema-level report validation that rejects report sections citing unknown claims before persistence.
 - Add model-output repair/retry policy after eval baselines exist.
 
 ## Stage 3: Routed Research DAG
@@ -108,13 +108,15 @@ Acceptance criteria:
 
 Goal: measure the quality of both report output and workflow behavior.
 
+Status: first evaluator implemented. `packages/evals` now provides an offline `evaluateEvidenceTrajectory` function that scores evidence coverage, citation validity, and required-dimension coverage, with deterministic findings for unsupported claims, unknown facts, and missing dimensions.
+
 Tasks:
 
-1. Create `packages/evals`.
-2. Add golden projects with small fixture sources.
-3. Add evidence-chain metrics.
-4. Add citation-validity metrics.
-5. Add Critic injection tests for unsupported claims and missing dimensions.
+1. Done: Create `packages/evals`.
+2. Pending: Add golden projects with small fixture sources.
+3. Done: Add evidence-chain metrics.
+4. Done: Add citation-validity metrics.
+5. Done for first pass: Add deterministic tests for unsupported claims, unknown facts, and missing dimensions.
 6. Add report-quality grading hooks.
 7. Add a command that runs evals locally and outputs a summary.
 
