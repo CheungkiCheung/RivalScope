@@ -27,6 +27,45 @@ Observe -> Evaluate -> Diagnose -> Repair -> Re-evaluate -> Finalize
 
 Any work that does not strengthen this loop is secondary.
 
+## Current Top-3 Readiness Judgment
+
+The current direction is worth continuing, but it is not enough to claim "guaranteed top 3."
+
+The objective assessment is:
+
+```text
+Current readiness: about 7.6 / 10
+Target readiness before final submission: 9.0+ / 10
+```
+
+The plan is strong because it already has explicit workflow control, typed artifacts, source attribution, critic review, evals, and observability. The main risk is not technical ambition. The main risk is that judges may perceive it as a polished AI report generator instead of an observable multi-agent intelligence system.
+
+Therefore every milestone must make three judge-facing artifacts stronger:
+
+1. **Agent Collaboration DAG**: specialized agents, handoffs, inputs, outputs, failures, and review loops are visible.
+2. **Competitor Intelligence Schema**: agents share a domain-specific schema instead of passing generic prose.
+3. **Claim Trust Graph with Repair Delta**: the system proves which claims are trustworthy, why, and how critique/repair improved them.
+
+If a milestone does not improve at least one of these three artifacts, it is probably not top-3 work.
+
+## External Pattern Baseline
+
+RivalScope should borrow mature patterns from leading agent systems while keeping its own explicit control plane.
+
+- OpenAI Agents SDK emphasizes agent handoffs, guardrails, and tracing of model calls, tool calls, handoffs, guardrails, and custom events.
+- Anthropic's agent guidance emphasizes using simple, composable workflows before escalating to open-ended autonomy.
+- LangGraph-style systems emphasize durable graph execution, checkpoints, and human-in-the-loop control.
+- ByteDance DeerFlow demonstrates the competition-relevant shape of a long-horizon research harness: planning, specialized roles, tools, memory, subagents, and report generation.
+- Langfuse-style observability shows that traces, datasets, experiments, and scores should be first-class system objects, not debug logs.
+
+The resulting RivalScope principle:
+
+```text
+Use explicit typed workflows as the source of truth.
+Expose agent collaboration and intelligence quality as product surfaces.
+Avoid framework rewrites unless they improve visible quality, reliability, or evaluation.
+```
+
 ## North Star
 
 The north-star metric is Intelligence Quality Score, or IQS.
@@ -60,6 +99,147 @@ Current implementation covers the first part of this system:
 
 Next work must extend this into claim-level trust.
 
+## Judge-Facing Top-3 Proof
+
+The final demo must make this story obvious within one minute:
+
+```text
+RivalScope is not a report generator.
+It is an observable competitor-intelligence agent system where specialized agents
+collect evidence, normalize it into a competitor schema, generate claims, challenge
+each other, repair weak conclusions, and prove quality improvement with source-level
+attribution.
+```
+
+The canonical demo should show:
+
+```text
+Input:
+Analyze 3 competitors in one product category.
+
+Agent flow:
+Collector Agent -> Evidence Pack
+Schema Agent -> Competitor Intelligence Profile
+Analyst Agent -> Evidence-backed Claims
+Writer Agent -> Draft Report
+Quality Agent -> Targeted Findings
+Repair Agent -> Revised Claims / Report
+Final Evaluator -> IQS Delta
+
+Visible proof:
+Draft IQS: 60-70 range
+Final IQS: 80+ range
+At least 5 inspectable claim trust graphs
+At least 1 repaired unsupported or weak claim
+Every final claim traces to source chunks
+```
+
+Competition demo is ready only if:
+
+1. A fresh judge understands the differentiator in under 60 seconds.
+2. At least 3 competitors are analyzed through the schema.
+3. At least 5 final claims have inspectable trust graphs.
+4. At least 1 weak draft becomes stronger after critique and repair.
+5. Every final claim has valid source attribution.
+6. The DAG view shows at least 5 agent/node handoffs.
+7. The README explains why this is an Agent collaboration system, not a report generator.
+8. The product can show a before/after quality delta, not only a final report.
+
+## Canonical Competitor Intelligence Schema
+
+The competitor schema is the shared memory contract across agents. It should drive collection, extraction, analysis, coverage scoring, report structure, critic findings, and repair.
+
+The canonical schema dimensions are:
+
+```text
+CompetitorIntelligenceProfile
+  identity
+  positioning
+  product_capabilities
+  pricing_and_packaging
+  target_segments
+  distribution_channels
+  traction_signals
+  technical_differentiators
+  strategic_risks
+  evidence_coverage
+  claim_trust_summary
+```
+
+Each schema dimension should eventually carry:
+
+- Competitor id and name.
+- Dimension id.
+- Normalized facts.
+- Evidence source count.
+- Source diversity.
+- Source recency or freshness when available.
+- Claim count.
+- Average claim trust.
+- Missing evidence gaps.
+- Conflicting evidence risk.
+
+Schema coverage is not a cosmetic report outline. It is the main way the system decides what evidence is missing and what the next agent should repair.
+
+## Agent Collaboration Contract
+
+The product must present specialized agents even when some implementations are deterministic or mock-backed.
+
+| Agent | Input | Output | Quality Gate |
+|---|---|---|---|
+| Collector Agent | competitors, topic, research plan | sources, source chunks, tool calls | source coverage, fetch success, traceability |
+| Schema Agent | source chunks, competitor list | normalized facts in the competitor schema | fact confidence, competitor allowlist, source chunk validity |
+| Analyst Agent | facts, schema coverage | evidence-backed claims | claim trust, dimension coverage, fact references |
+| Writer Agent | claims, schema profile | report sections | citation validity, claim references |
+| Quality Agent | draft report, claim graph, eval summary | targeted findings | severity, target object, repair suggestion |
+| Repair Agent | findings, draft artifacts, evidence gaps | repaired claims/report or explicit gaps | IQS delta, removed unsupported claims, unresolved risk list |
+| Final Evaluator | final artifacts and trace | IQS and readiness summary | no unsupported final claims, demo gates |
+
+Agent handoffs are product data. For each handoff the system should be able to show:
+
+- Producing agent.
+- Consuming agent.
+- Artifact ids.
+- Input/output schema.
+- Quality gate result.
+- Failure or retry state.
+
+## Source Attribution Contract
+
+Trust is only meaningful if attribution rules are explicit.
+
+Final outputs must obey:
+
+1. Every final claim cites at least one fact.
+2. Every cited fact traces to at least one source chunk.
+3. Every source chunk traces to a source URL or fixture source.
+4. Duplicate chunks do not increase trust.
+5. Unknown fact ids, claim ids, competitor ids, or source chunk ids cannot be silently accepted.
+6. Claims with weak or missing evidence are downgraded, flagged, excluded, or routed to repair.
+7. High-risk dimensions such as pricing, market share, legal claims, layoffs, and security claims require stricter trust gates.
+8. Report export includes an evidence appendix.
+
+This contract is testable and must be visible through Claim Trust Graph and Intelligence Trace.
+
+## Intelligence Trace Surface
+
+Observability is a product surface, not only debugging.
+
+The project page should converge toward a single judge-facing surface called **Intelligence Trace**:
+
+```text
+Research Plan
+-> Agent Collaboration DAG
+-> Artifact Lineage
+-> Competitor Schema Coverage
+-> Claim Trust Graph
+-> Quality Findings
+-> Repair History
+-> Final IQS
+```
+
+This surface is the answer to "why should anyone trust this analysis?"
+
 ## Non-Negotiable Principles
 
 1. **Evaluation before optimization.** Every major improvement needs a metric, test, and UI surface.
@@ -70,12 +250,45 @@ Next work must extend this into claim-level trust.
 6. **No broad rewrites.** Do not replace the explicit DAG control plane with a framework unless there is a precise reason.
 7. **No average feature work.** Features that do not improve trust, observability, repair, or demo strength should be deferred.
 8. **Quality gates are mandatory.** Do not call work complete without fresh verification.
+9. **Judge-visible before clever.** A sophisticated module that judges cannot see, inspect, or understand is not competition-ready.
+10. **Schema before prose.** The competitor intelligence schema is the collaboration contract between agents.
+11. **Repair must prove delta.** Critique is not enough; the system must show what changed and how IQS improved.
 
 ## Top 3 Differentiators
 
-The project must converge on four visible differentiators.
+The project must converge on six visible differentiators.
 
-### 1. Claim Trust Graph
+### 1. Agent Collaboration DAG
+
+The DAG must show the system is an Agent collaboration platform, not a single prompt pipeline:
+
+```text
+collect_by_competitor
+-> schema_extract_by_competitor
+-> analyze_by_dimension
+-> write_draft
+-> quality_review
+-> repair_or_gap
+-> final_eval
+```
+
+The first version can be thin and mapped onto current workflow nodes, but it must be visible early.
+
+### 2. Competitor Intelligence Schema
+
+All agents should converge on a domain schema rather than generic report text.
+
+The schema should power:
+
+- Research plan dimensions.
+- Extraction targets.
+- Coverage metrics.
+- Claim dimensions.
+- Report sections.
+- Critic missing-dimension findings.
+- Repair tasks.
+
+### 3. Claim Trust Graph
 
 Every important report claim should become an inspectable trust node:
 
@@ -100,7 +313,7 @@ Each claim node should show:
 - Critic impact.
 - Trust reasons.
 
-### 2. Structured Critic Findings
+### 4. Structured Critic Findings
 
 Critic output must become targetable product data, not only prose:
 
@@ -115,7 +328,7 @@ finding.repairSuggestion
 
 The UI should link findings to the exact object they criticize.
 
-### 3. Eval-Guided Repair Loop
+### 5. Eval-Guided Repair Loop
 
 The system should show quality improvement, not just quality inspection:
 
@@ -137,7 +350,7 @@ Repair actions: 4
 Final IQS: 88
 ```
 
-### 4. Routed Research DAG
+### 6. Routed Research DAG
 
 The workflow should become branch-aware:
 
@@ -156,9 +369,23 @@ Branch status and branch-level evidence gaps should be visible.
 
 ## Phase Order
 
-Do not reorder without a clear reason.
+Do not reorder without a clear reason. However, each phase must expose a thin judge-visible trace of agent collaboration. Full routed execution can wait until Phase 4, but the visible Agent Collaboration DAG cannot wait until Phase 4.
 
-### Phase 1: Claim Trust Score + Claim Trust Graph
+### Phase 0.5: Harness Sharpening And Demo Contract
+
+Goal: lock the competition narrative before new code.
+
+Required deliverables:
+
+- This harness includes current readiness, judge-facing proof, competitor schema, agent contract, and source attribution contract.
+- `docs/next-stage-plan.md` reflects the same phase order.
+- Phase 1 implementation plan exists before code changes.
+
+Phase 0.5 completion gate:
+
+- A future session can read this document and know what to build next without relying on conversation memory.
+
+### Phase 1: Claim Trust Score + Claim Trust Graph + Thin Agent Trace
 
 Goal: create the metric and UI base for all future optimization.
 
@@ -169,6 +396,8 @@ Required deliverables:
 - Tests for high-trust and low-trust claims.
 - Web project summary builder for claim trust graph.
 - Project-page Claim Trust Graph panel.
+- Minimal Agent Collaboration Trace panel using current workflow/agent run data.
+- Competitor schema dimension labels connected to trust summaries.
 - Documentation explaining the scoring formula.
 
 First scoring formula:
@@ -197,6 +426,7 @@ Phase 1 completion gate:
 - A reviewer can open a project page and inspect every claim's trust score and supporting facts/source chunks.
 - Duplicate facts/chunks do not inflate trust.
 - Trust scoring is covered by deterministic unit tests.
+- The same page shows which agent created the claim path and which schema dimension it belongs to.
 
 ### Phase 2: Structured Critic Targeting
 
@@ -208,6 +438,7 @@ Required deliverables:
 - Critic emits targetable findings.
 - UI links findings to claim/fact/section targets.
 - Claim trust score consumes critic severity penalties.
+- Findings distinguish unsupported claims, weak evidence, missing schema dimensions, conflicting evidence, and risky overconfidence.
 - Tests for targeted findings and trust penalty impact.
 
 Phase 2 completion gate:
@@ -226,12 +457,14 @@ Required deliverables:
 - Workflow nodes for draft eval, critique, repair, and final eval.
 - Repair history UI.
 - Score delta metrics.
+- Before/after Claim Trust and IQS comparison.
 
 Phase 3 completion gate:
 
 - Demo can show draft score, repair actions, and final score.
 - Unsupported claims can be removed or downgraded.
 - Missing dimensions can trigger explicit repair tasks or gaps.
+- At least one seeded demo fixture shows an IQS improvement after repair.
 
 ### Phase 4: Routed Research DAG
 
@@ -384,7 +617,7 @@ These are not priorities until Claim Trust Graph is in the product:
 The next implementation milestone is Phase 1:
 
 ```text
-Claim Trust Score + Claim Trust Graph
+Claim Trust Score + Claim Trust Graph + Thin Agent Trace
 ```
 
-Start with deterministic eval code and tests in `packages/evals`, then build the web summary and UI. Do not start repair loop or routed DAG until claim trust is visible and tested.
+Start with deterministic eval code and tests in `packages/evals`, then build the web summary, Claim Trust Graph UI, and minimal Agent Collaboration Trace. Do not start the full repair loop or routed DAG until claim trust is visible and tested.

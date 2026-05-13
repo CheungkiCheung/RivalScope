@@ -15,10 +15,29 @@ The next stage should make RivalScope look less like a mock demo and more like a
 
 This plan is now governed by `docs/top3-execution-harness.md`. If this document and the harness disagree, follow the harness unless the user explicitly changes the competition strategy.
 
+## Top-3 Readiness Update
+
+Independent competition-style review judged the current direction as **plausibly top-3 capable but not yet top-3 ready**.
+
+The working score is:
+
+```text
+Current readiness: about 7.6 / 10
+Target readiness before final submission: 9.0+ / 10
+```
+
+The plan should continue, but with a sharper execution order. The project must stop looking like a better AI report generator and start looking like an observable competitor-intelligence Agent OS.
+
+The next stage is now organized around three judge-visible artifacts:
+
+1. **Agent Collaboration DAG**: the product shows specialized agents, handoffs, quality gates, and failures.
+2. **Competitor Intelligence Schema**: collection, extraction, analysis, coverage, report sections, and repair all use the same domain schema.
+3. **Claim Trust Graph with Repair Delta**: every important claim can be inspected, scored, challenged, and improved.
+
 The immediate next milestone is:
 
 ```text
-Claim Trust Score + Claim Trust Graph
+Claim Trust Score + Claim Trust Graph + Thin Agent Trace
 ```
 
 ## Research Summary
@@ -40,6 +59,155 @@ Useful references:
 - LangGraph and Microsoft Agent Framework for graph execution and HITL.
 - Open Deep Research and DeerFlow for research/report generation.
 - Langfuse and Pydantic AI for observability, evals, datasets, and type safety.
+
+Important synthesis:
+
+- OpenAI-style systems make traces, guardrails, handoffs, and evals first-class.
+- Anthropic-style guidance favors explicit workflows over premature open-ended autonomy.
+- LangGraph-style systems validate durable graph execution, checkpoints, and human-in-the-loop.
+- DeerFlow is especially relevant to a ByteDance context because it frames long-horizon research as planning, specialized roles, tool use, memory, subagents, and report generation.
+- Langfuse-style observability reinforces that traces and scores should become product data, not hidden logs.
+
+RivalScope should borrow these patterns without replacing the current explicit TypeScript DAG unless a replacement clearly improves reliability, evaluation, or judge-visible product value.
+
+## Competition Demo Contract
+
+The canonical demo should make this sequence clear:
+
+```text
+Input:
+Analyze 3 competitors in one product category.
+
+Flow:
+Collector Agent collects sources.
+Schema Agent normalizes facts into CompetitorIntelligenceProfile.
+Analyst Agent generates evidence-backed claims.
+Writer Agent drafts the report.
+Quality Agent produces targeted findings.
+Repair Agent removes, downgrades, or repairs weak claims.
+Final Evaluator shows IQS improvement.
+```
+
+The demo is not ready unless:
+
+- At least 3 competitors are analyzed through the schema.
+- At least 5 final claims have inspectable trust graphs.
+- Every final claim traces to source chunks.
+- At least 1 weak draft claim is repaired or downgraded.
+- The product shows before/after quality delta.
+- The DAG view shows at least 5 agent/node handoffs.
+- A fresh judge understands the core differentiator in under 60 seconds.
+
+## Competitor Intelligence Schema
+
+Use this as the shared domain contract for the next phases:
+
+```text
+CompetitorIntelligenceProfile
+  identity
+  positioning
+  product_capabilities
+  pricing_and_packaging
+  target_segments
+  distribution_channels
+  traction_signals
+  technical_differentiators
+  strategic_risks
+  evidence_coverage
+  claim_trust_summary
+```
+
+The schema should drive:
+
+- Research plan dimensions.
+- Source collection targets.
+- Extracted fact dimensions.
+- Claim dimensions.
+- Report sections.
+- Missing-dimension findings.
+- Repair tasks.
+- Coverage metrics.
+
+## Updated Stage 0.5: Harness And Plan Hardening
+
+Goal: make future sessions robust against drift before coding the next phase.
+
+Status: implemented for planning.
+
+Tasks:
+
+1. Done: update `docs/top3-execution-harness.md` with the current 7.6/10 readiness judgment.
+2. Done: define the three judge-visible proof artifacts.
+3. Done: define the canonical competitor intelligence schema.
+4. Done: define demo readiness gates.
+5. Done: create the Phase 1 implementation plan under `docs/superpowers/plans/2026-05-13-claim-trust-graph.md`.
+
+Acceptance criteria:
+
+- A new session can continue from the docs without relying on conversation memory.
+- The next code milestone is explicit, testable, and competition-aligned.
+
+## Updated Stage 1: Claim Trust Graph And Thin Agent Trace
+
+Goal: add the first judge-visible trust surface and connect it to agent collaboration.
+
+Tasks:
+
+1. Add deterministic `evaluateClaimTrust` in `@rivalscope/evals`.
+2. Add trust reasons, risk levels, and source/fact deduplication.
+3. Add unit tests for high-trust, low-trust, missing-citation, unknown-reference, duplicate-source, and low-confidence cases.
+4. Build a web summary that maps report sections to claims, facts, source chunks, sources, dimensions, and producing agent data.
+5. Add a project-page Claim Trust Graph panel.
+6. Add a minimal Agent Collaboration Trace using current workflow node and agent run records.
+7. Label claims and trust summaries with competitor schema dimensions.
+8. Update docs with the scoring formula and limitations.
+
+Acceptance criteria:
+
+- A reviewer can open one project page and inspect trust for final claims.
+- Each inspected claim shows cited facts and source chunks.
+- Duplicate evidence does not inflate trust.
+- Claims belong to schema dimensions.
+- The page shows which agent path produced the claim.
+- The metric is deterministic and covered by tests.
+
+## Updated Stage 2: Structured Critic Targeting
+
+Goal: make review findings actionable instead of prose-only.
+
+Tasks:
+
+1. Add target fields to review findings: `targetType`, `targetId`, `dimension`, `category`, `severity`, and `repairSuggestion`.
+2. Teach Critic Agent to target claims, facts, sections, dimensions, or workflow-level gaps.
+3. Connect findings to Claim Trust penalties.
+4. Link findings to the object being criticized in the UI.
+5. Add findings for unsupported claims, weak evidence, missing schema dimensions, conflicting evidence, and risky overconfidence.
+
+Acceptance criteria:
+
+- Clicking or inspecting a finding reveals the criticized object.
+- High-severity findings reduce trust score.
+- Missing schema dimensions become structured findings, not only report comments.
+
+## Updated Stage 3: Eval-Guided Repair Loop
+
+Goal: prove that agent collaboration improves intelligence quality.
+
+Tasks:
+
+1. Add a repair plan artifact.
+2. Add a deterministic Repair Agent or module before relying on LLM repair.
+3. Add draft eval, critique, repair, and final eval workflow nodes.
+4. Add repair action records tied to critic findings.
+5. Add before/after Claim Trust and IQS comparison.
+6. Add a seeded demo fixture where a weak draft improves after repair.
+
+Acceptance criteria:
+
+- Demo shows draft score, findings, repair actions, and final score.
+- Unsupported claims can be removed or downgraded.
+- Missing dimensions can create explicit repair tasks or unresolved gaps.
+- At least one golden fixture proves score improvement.
 
 ## Stage 1: Real Source Tooling
 
@@ -172,12 +340,14 @@ These are intentionally not part of the next stage:
 
 ## Recommended Execution Order
 
-1. Real source tooling.
-2. Tool-call persistence hardening and UI.
-3. Model gateway.
-4. Real Extract and Analyst agents.
-5. Routed DAG.
-6. Trajectory evals.
-7. Observability upgrade.
+1. Done: real source tooling.
+2. Done for MVP path: tool-call persistence hardening and UI.
+3. Done for MVP path: model gateway.
+4. Done for MVP path: optional real Extract and Analyst agents.
+5. Next: Claim Trust Graph and Thin Agent Trace.
+6. Next after trust graph: Structured Critic Targeting.
+7. Next after targeted critic: Eval-Guided Repair Loop.
+8. Later: full Routed Research DAG.
+9. Later: delivery and demo hardening.
 
 This order keeps the system demonstrable at every step. It also protects the most important interview story: RivalScope is an agent system with explicit control flow, typed artifacts, evidence grounding, critique, and measurable quality.
