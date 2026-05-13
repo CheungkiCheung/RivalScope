@@ -23,6 +23,13 @@ interface AnalysisRequirementCompetitor {
   name: string;
 }
 
+export type ReviewFindingTargetType =
+  | "claim"
+  | "fact"
+  | "section"
+  | "dimension"
+  | "workflow";
+
 export interface ReviewFinding {
   id: string;
   severity: "low" | "medium" | "high";
@@ -34,6 +41,10 @@ export interface ReviewFinding {
     | "unknown_claim"
     | "missing_dimension";
   message: string;
+  targetType: ReviewFindingTargetType;
+  targetId: string;
+  dimension?: string;
+  repairSuggestion: string;
 }
 
 export interface ReportSectionDraft {
@@ -421,7 +432,12 @@ export function createCriticAgent(): WorkflowAgent {
             id: `finding_${claim.id}_no_facts`,
             severity: "high",
             category: "unsupported_claim",
-            message: `Claim ${claim.id} has no cited facts.`
+            message: `Claim ${claim.id} has no cited facts.`,
+            targetType: "claim",
+            targetId: claim.id,
+            dimension: claim.dimension,
+            repairSuggestion:
+              "Remove the claim or attach at least one valid supporting fact before publication."
           });
         }
 
@@ -431,7 +447,12 @@ export function createCriticAgent(): WorkflowAgent {
               id: `finding_${claim.id}_unknown_${factId}`,
               severity: "high",
               category: "unknown_fact",
-              message: `Claim ${claim.id} cites unknown fact ${factId}.`
+              message: `Claim ${claim.id} cites unknown fact ${factId}.`,
+              targetType: "claim",
+              targetId: claim.id,
+              dimension: claim.dimension,
+              repairSuggestion:
+                "Replace unknown fact references with persisted facts or rerun extraction for this claim."
             });
           }
         }
@@ -441,7 +462,12 @@ export function createCriticAgent(): WorkflowAgent {
             id: `finding_${claim.id}_low_confidence`,
             severity: "medium",
             category: "low_confidence",
-            message: `Claim ${claim.id} has low confidence ${claim.confidence}.`
+            message: `Claim ${claim.id} has low confidence ${claim.confidence}.`,
+            targetType: "claim",
+            targetId: claim.id,
+            dimension: claim.dimension,
+            repairSuggestion:
+              "Downgrade the claim wording or collect stronger evidence before keeping it in the report."
           });
         }
       }
@@ -452,7 +478,11 @@ export function createCriticAgent(): WorkflowAgent {
             id: `finding_${section.id}_no_claims`,
             severity: "high",
             category: "uncited_report_section",
-            message: `Report section ${section.id} has no cited claims.`
+            message: `Report section ${section.id} has no cited claims.`,
+            targetType: "section",
+            targetId: section.id,
+            repairSuggestion:
+              "Attach at least one evidence-backed claim to this section or remove the section."
           });
         }
 
@@ -462,7 +492,11 @@ export function createCriticAgent(): WorkflowAgent {
               id: `finding_${section.id}_unknown_${claimId}`,
               severity: "high",
               category: "unknown_claim",
-              message: `Report section ${section.id} cites unknown claim ${claimId}.`
+              message: `Report section ${section.id} cites unknown claim ${claimId}.`,
+              targetType: "section",
+              targetId: section.id,
+              repairSuggestion:
+                "Replace unknown claim references with persisted claims or rerun report writing."
             });
           }
         }
@@ -477,7 +511,12 @@ export function createCriticAgent(): WorkflowAgent {
               id: `finding_missing_dimension_${dimension}`,
               severity: "medium",
               category: "missing_dimension",
-              message: `Missing required dimension ${dimension}.`
+              message: `Missing required dimension ${dimension}.`,
+              targetType: "dimension",
+              targetId: dimension,
+              dimension,
+              repairSuggestion:
+                "Collect or synthesize evidence-backed claims for the missing required dimension."
             });
           }
         }

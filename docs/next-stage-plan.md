@@ -179,6 +179,8 @@ Current limitation: Claim Trust v1 is deterministic and structural. Semantic sup
 
 Goal: make review findings actionable instead of prose-only.
 
+Status: implemented for targeted critic findings and Claim Trust penalty integration.
+
 Tasks:
 
 1. Add target fields to review findings: `targetType`, `targetId`, `dimension`, `category`, `severity`, and `repairSuggestion`.
@@ -192,6 +194,8 @@ Acceptance criteria:
 - Clicking or inspecting a finding reveals the criticized object.
 - High-severity findings reduce trust score.
 - Missing schema dimensions become structured findings, not only report comments.
+
+Current limitation: Phase 2 records repair suggestions but does not execute repair actions. Repair execution starts in Phase 3.
 
 ## Updated Stage 3: Eval-Guided Repair Loop
 
@@ -349,8 +353,8 @@ These are intentionally not part of the next stage:
 3. Done for MVP path: model gateway.
 4. Done for MVP path: optional real Extract and Analyst agents.
 5. Done for deterministic first surface: Claim Trust Graph and Thin Agent Trace.
-6. Next: Structured Critic Targeting.
-7. Next after targeted critic: Eval-Guided Repair Loop.
+6. Done: Structured Critic Targeting.
+7. Next: Eval-Guided Repair Loop.
 8. Later: full Routed Research DAG.
 9. Later: delivery and demo hardening.
 

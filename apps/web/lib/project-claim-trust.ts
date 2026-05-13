@@ -8,6 +8,7 @@ import type {
 } from "@rivalscope/core";
 import {
   evaluateClaimTrust,
+  type ClaimTrustCriticFinding,
   type ClaimTrustResult,
   type ClaimTrustRiskLevel
 } from "@rivalscope/evals";
@@ -102,6 +103,14 @@ export interface ProjectClaimTrustSummary {
 export interface BuildProjectClaimTrustSummaryInput {
   sources: ProjectClaimTrustSource[];
   reportSections: ProjectClaimTrustReportSection[];
+  reviewFindings?: ProjectClaimTrustReviewFinding[];
+}
+
+export interface ProjectClaimTrustReviewFinding {
+  severity: "LOW" | "MEDIUM" | "HIGH";
+  targetType: string | null;
+  targetId: string | null;
+  message: string;
 }
 
 export function buildProjectClaimTrustSummary(
@@ -123,7 +132,8 @@ export function buildProjectClaimTrustSummary(
         section,
         claim: link.claim,
         sources,
-        chunks
+        chunks,
+        reviewFindings: input.reviewFindings ?? []
       })
     )
   );
@@ -145,6 +155,7 @@ function buildNode(input: {
   claim: ProjectClaimTrustClaim;
   sources: Source[];
   chunks: SourceChunk[];
+  reviewFindings: ProjectClaimTrustReviewFinding[];
 }): ProjectClaimTrustNode {
   const claim = toCoreClaim(input.claim);
   const facts = uniqueById(input.claim.facts.map((link) => toCoreFact(link.fact)));
@@ -152,7 +163,8 @@ function buildNode(input: {
     claim,
     facts,
     chunks: input.chunks,
-    sources: input.sources
+    sources: input.sources,
+    criticFindings: toClaimTrustCriticFindings(input.reviewFindings)
   });
   const chunkById = new Map(input.chunks.map((chunk) => [chunk.id, chunk]));
   const sourceById = new Map(input.sources.map((source) => [source.id, source]));
@@ -237,6 +249,54 @@ function toCoreFact(fact: ProjectClaimTrustFact): Fact {
     sourceChunkIds: fact.chunks.map((chunkLink) => chunkLink.chunkId),
     confidence: fact.confidence
   };
+}
+
+function toClaimTrustCriticFindings(
+  findings: ProjectClaimTrustReviewFinding[]
+): ClaimTrustCriticFinding[] {
+  return findings
+    .filter(
+      (finding): finding is ProjectClaimTrustReviewFinding & {
+        targetType: NonNullable<ProjectClaimTrustReviewFinding["targetType"]>;
+        targetId: NonNullable<ProjectClaimTrustReviewFinding["targetId"]>;
+      } => finding.targetType !== null && finding.targetId !== null
+    )
+    .map((finding) => ({
+      severity: toClaimTrustSeverity(finding.severity),
+      targetType: toClaimTrustTargetType(finding.targetType),
+      targetId: finding.targetId,
+      message: finding.message
+    }));
+}
+
+function toClaimTrustSeverity(
+  severity: ProjectClaimTrustReviewFinding["severity"]
+): ClaimTrustCriticFinding["severity"] {
+  if (severity === "LOW") {
+    return "low";
+  }
+
+  if (severity === "MEDIUM") {
+    return "medium";
+  }
+
+  return "high";
+}
+
+function toClaimTrustTargetType(
+  targetType: string
+): ClaimTrustCriticFinding["targetType"] {
+  if (
+    targetType === "claim" ||
+    targetType === "fact" ||
+    targetType === "section" ||
+    targetType === "dimension" ||
+    targetType === "workflow"
+  ) {
+    return targetType;
+  }
+
+  return "workflow";
 }
 
 function toCoreClaimKind(kind: ClaimKind): CoreClaimKind {

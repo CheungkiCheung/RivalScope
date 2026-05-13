@@ -622,15 +622,63 @@ describe("critic agent", () => {
       status: "needs_revision",
       qualityScore: 20
     });
-    expect(JSON.stringify(output.value)).toContain("has no cited facts");
-    expect(JSON.stringify(output.value)).toContain("unknown fact fact_missing");
-    expect(JSON.stringify(output.value)).toContain(
-      "Missing required dimension developer_experience"
+    const review = output.value as {
+      status: string;
+      qualityScore: number;
+      findings: Array<{
+        severity: string;
+        category: string;
+        message: string;
+        targetType: string;
+        targetId: string;
+        dimension?: string;
+        repairSuggestion: string;
+      }>;
+    };
+
+    expect(review.findings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          category: "unsupported_claim",
+          targetType: "claim",
+          targetId: "claim_no_facts",
+          dimension: "pricing",
+          repairSuggestion:
+            "Remove the claim or attach at least one valid supporting fact before publication."
+        }),
+        expect.objectContaining({
+          category: "unknown_fact",
+          targetType: "claim",
+          targetId: "claim_unknown_fact",
+          dimension: "positioning",
+          repairSuggestion:
+            "Replace unknown fact references with persisted facts or rerun extraction for this claim."
+        }),
+        expect.objectContaining({
+          category: "low_confidence",
+          targetType: "claim",
+          targetId: "claim_low_confidence",
+          dimension: "pricing",
+          repairSuggestion:
+            "Downgrade the claim wording or collect stronger evidence before keeping it in the report."
+        }),
+        expect.objectContaining({
+          category: "uncited_report_section",
+          targetType: "section",
+          targetId: "section_summary",
+          repairSuggestion:
+            "Attach at least one evidence-backed claim to this section or remove the section."
+        }),
+        expect.objectContaining({
+          category: "missing_dimension",
+          targetType: "dimension",
+          targetId: "developer_experience",
+          dimension: "developer_experience",
+          repairSuggestion:
+            "Collect or synthesize evidence-backed claims for the missing required dimension."
+        })
+      ])
     );
-    expect(JSON.stringify(output.value)).toContain(
-      "section_summary has no cited claims"
-    );
-    expect(JSON.stringify(output.value)).toContain("low confidence");
   });
 });
 

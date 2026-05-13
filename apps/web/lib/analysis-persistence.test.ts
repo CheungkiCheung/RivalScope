@@ -166,7 +166,17 @@ describe("persistAnalysisExecution", () => {
           projectId: "project_1",
           status: "approved",
           qualityScore: 100,
-          findings: []
+          findings: [
+            {
+              severity: "high",
+              category: "unsupported_claim",
+              message: "Claim needs stronger evidence.",
+              targetType: "claim",
+              targetId: "claim_temp_1",
+              dimension: "pricing",
+              repairSuggestion: "Attach stronger evidence before publishing."
+            }
+          ]
         },
         "2026-05-11T00:00:05.000Z"
       )
@@ -355,6 +365,14 @@ describe("persistAnalysisExecution", () => {
         competitorId: "competitor_cursor"
       })
     );
+    expect(repository.intelligence.createReviewFindings).toHaveBeenCalledWith([
+      expect.objectContaining({
+        targetType: "claim",
+        targetId: "claim_temp_1",
+        targetDimension: "pricing",
+        repairSuggestion: "Attach stronger evidence before publishing."
+      })
+    ]);
     expect(result.workflow.nodes.find((node) => node.id === "write")?.outputArtifactIds).toEqual([
       "db_artifact_report"
     ]);

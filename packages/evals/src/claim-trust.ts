@@ -9,7 +9,8 @@ export type ClaimTrustPenaltyCode =
   | "unknown_source_chunk"
   | "chunk_without_source"
   | "low_fact_confidence"
-  | "single_source";
+  | "single_source"
+  | "high_severity_critic_finding";
 
 export interface ClaimTrustPenalty {
   code: ClaimTrustPenaltyCode;
@@ -47,6 +48,14 @@ export interface EvaluateClaimTrustInput {
   facts: Fact[];
   chunks: SourceChunk[];
   sources: Source[];
+  criticFindings?: ClaimTrustCriticFinding[];
+}
+
+export interface ClaimTrustCriticFinding {
+  severity: "low" | "medium" | "high";
+  targetType: "claim" | "fact" | "section" | "dimension" | "workflow";
+  targetId: string;
+  message: string;
 }
 
 export function evaluateClaimTrust(input: EvaluateClaimTrustInput): ClaimTrustResult {
@@ -74,7 +83,8 @@ export function evaluateClaimTrust(input: EvaluateClaimTrustInput): ClaimTrustRe
     validSources,
     factById,
     chunkById,
-    sourceById
+    sourceById,
+    criticFindings: input.criticFindings ?? []
   });
   const metrics: ClaimTrustMetrics = {
     citationValidity: ratio(validFactIds.length, citedFactIds.length),
@@ -122,6 +132,7 @@ function buildPenalties(input: {
   factById: Map<string, Fact>;
   chunkById: Map<string, SourceChunk>;
   sourceById: Map<string, Source>;
+  criticFindings: ClaimTrustCriticFinding[];
 }): ClaimTrustPenalty[] {
   const penalties: ClaimTrustPenalty[] = [];
 
@@ -192,6 +203,20 @@ function buildPenalties(input: {
       points: 8,
       message: `Claim ${input.claim.id} is supported by only one unique source.`
     });
+  }
+
+  for (const finding of input.criticFindings) {
+    if (
+      finding.severity === "high" &&
+      finding.targetType === "claim" &&
+      finding.targetId === input.claim.id
+    ) {
+      penalties.push({
+        code: "high_severity_critic_finding",
+        points: 15,
+        message: finding.message
+      });
+    }
   }
 
   return penalties;

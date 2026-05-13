@@ -104,6 +104,10 @@ export interface CreateReviewFindingInput {
   severity: FindingSeverity;
   category: FindingCategory;
   message: string;
+  targetType?: string;
+  targetId?: string;
+  targetDimension?: string;
+  repairSuggestion?: string;
 }
 
 export class ProjectRepository {

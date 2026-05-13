@@ -118,6 +118,10 @@ export interface PersistAnalysisRepositories {
       severity: FindingSeverity;
       category: FindingCategory;
       message: string;
+      targetType?: string;
+      targetId?: string;
+      targetDimension?: string;
+      repairSuggestion?: string;
     }>): Promise<unknown>;
   };
 }
@@ -337,6 +341,10 @@ async function persistIntelligence(
       severity: string;
       category: string;
       message: string;
+      targetType?: string;
+      targetId?: string;
+      dimension?: string;
+      repairSuggestion?: string;
     }>;
   }>(artifacts, "review_findings");
 
@@ -411,7 +419,15 @@ async function persistIntelligence(
       reportId: report.id,
       severity: toFindingSeverity(finding.severity),
       category: toFindingCategory(finding.category),
-      message: finding.message
+      message: finding.message,
+      ...(finding.targetType !== undefined ? { targetType: finding.targetType } : {}),
+      ...(finding.targetId !== undefined ? { targetId: finding.targetId } : {}),
+      ...(finding.dimension !== undefined
+        ? { targetDimension: finding.dimension }
+        : {}),
+      ...(finding.repairSuggestion !== undefined
+        ? { repairSuggestion: finding.repairSuggestion }
+        : {})
     }))
   );
 

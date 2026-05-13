@@ -383,13 +383,17 @@ model ReportSectionClaim {
 }
 
 model ReviewFinding {
-  id        String          @id @default(cuid())
-  projectId String
-  reportId  String?
-  severity  FindingSeverity
-  category  FindingCategory
-  message   String
-  createdAt DateTime        @default(now())
+  id               String          @id @default(cuid())
+  projectId        String
+  reportId         String?
+  severity         FindingSeverity
+  category         FindingCategory
+  message          String
+  targetType       String?
+  targetId         String?
+  targetDimension  String?
+  repairSuggestion String?
+  createdAt        DateTime        @default(now())
 
   project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
   report  Report? @relation(fields: [reportId], references: [id], onDelete: SetNull)

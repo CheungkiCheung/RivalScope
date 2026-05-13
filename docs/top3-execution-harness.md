@@ -436,6 +436,8 @@ Current limitation: Claim Trust v1 is deterministic and structural. Semantic sup
 
 Goal: make review findings actionable and machine-usable.
 
+Status: implemented for targeted critic findings and Claim Trust penalty integration.
+
 Required deliverables:
 
 - Finding target fields in artifact schemas and persistence where needed.
@@ -449,6 +451,8 @@ Phase 2 completion gate:
 
 - Clicking or inspecting a finding reveals the object being criticized.
 - High-severity findings reduce trust score.
+
+Current limitation: Phase 2 records repair suggestions but does not execute repair actions. Repair execution starts in Phase 3.
 
 ### Phase 3: Eval-Guided Repair Loop
 
@@ -618,10 +622,10 @@ These are not priorities until Claim Trust Graph is in the product:
 
 ## Next Immediate Milestone
 
-The next implementation milestone is Phase 2:
+The next implementation milestone is Phase 3:
 
 ```text
-Structured Critic Targeting
+Eval-Guided Repair Loop
 ```
 
-Start by making critic findings target exact claims, facts, sections, dimensions, or workflow gaps. Then wire those targeted findings into Claim Trust penalties and UI navigation.
+Start by adding a repair plan artifact and deterministic repair module that can remove or downgrade unsupported claims, then show draft IQS, repair actions, and final IQS.

@@ -129,4 +129,186 @@ describe("buildProjectClaimTrustSummary", () => {
       ]
     });
   });
+
+  it("applies high-severity targeted review findings to matching claim trust", () => {
+    const clean = buildProjectClaimTrustSummary({
+      sources: [
+        {
+          id: "source_1",
+          projectId: "project_1",
+          kind: "URL",
+          title: "Cursor pricing",
+          uri: "https://cursor.com/pricing",
+          collectedAt: new Date("2026-05-13T00:00:00.000Z"),
+          chunks: [
+            {
+              id: "chunk_1",
+              sourceId: "source_1",
+              ordinal: 0,
+              text: "Cursor offers paid plans.",
+              tokenCount: 5
+            }
+          ]
+        },
+        {
+          id: "source_2",
+          projectId: "project_1",
+          kind: "URL",
+          title: "Cursor docs",
+          uri: "https://cursor.com/docs",
+          collectedAt: new Date("2026-05-13T00:00:00.000Z"),
+          chunks: [
+            {
+              id: "chunk_2",
+              sourceId: "source_2",
+              ordinal: 0,
+              text: "Cursor supports agentic workflows.",
+              tokenCount: 5
+            }
+          ]
+        }
+      ],
+      reportSections: [
+        {
+          id: "section_1",
+          title: "Product and pricing",
+          claims: [
+            {
+              claim: {
+                id: "claim_1",
+                projectId: "project_1",
+                dimension: "product_capabilities",
+                statement: "Cursor combines paid plans with agentic workflows.",
+                confidence: 0.88,
+                kind: "SINGLE_COMPETITOR",
+                facts: [
+                  {
+                    fact: {
+                      id: "fact_1",
+                      projectId: "project_1",
+                      competitorId: "competitor_cursor",
+                      dimension: "pricing",
+                      statement: "Cursor offers paid plans.",
+                      confidence: 0.9,
+                      competitor: { name: "Cursor" },
+                      chunks: [{ chunkId: "chunk_1" }]
+                    }
+                  },
+                  {
+                    fact: {
+                      id: "fact_2",
+                      projectId: "project_1",
+                      competitorId: "competitor_cursor",
+                      dimension: "product_capabilities",
+                      statement: "Cursor supports agentic workflows.",
+                      confidence: 0.86,
+                      competitor: { name: "Cursor" },
+                      chunks: [{ chunkId: "chunk_2" }]
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    });
+    const penalized = buildProjectClaimTrustSummary({
+      sources: [
+        {
+          id: "source_1",
+          projectId: "project_1",
+          kind: "URL",
+          title: "Cursor pricing",
+          uri: "https://cursor.com/pricing",
+          collectedAt: new Date("2026-05-13T00:00:00.000Z"),
+          chunks: [
+            {
+              id: "chunk_1",
+              sourceId: "source_1",
+              ordinal: 0,
+              text: "Cursor offers paid plans.",
+              tokenCount: 5
+            }
+          ]
+        },
+        {
+          id: "source_2",
+          projectId: "project_1",
+          kind: "URL",
+          title: "Cursor docs",
+          uri: "https://cursor.com/docs",
+          collectedAt: new Date("2026-05-13T00:00:00.000Z"),
+          chunks: [
+            {
+              id: "chunk_2",
+              sourceId: "source_2",
+              ordinal: 0,
+              text: "Cursor supports agentic workflows.",
+              tokenCount: 5
+            }
+          ]
+        }
+      ],
+      reportSections: [
+        {
+          id: "section_1",
+          title: "Product and pricing",
+          claims: [
+            {
+              claim: {
+                id: "claim_1",
+                projectId: "project_1",
+                dimension: "product_capabilities",
+                statement: "Cursor combines paid plans with agentic workflows.",
+                confidence: 0.88,
+                kind: "SINGLE_COMPETITOR",
+                facts: [
+                  {
+                    fact: {
+                      id: "fact_1",
+                      projectId: "project_1",
+                      competitorId: "competitor_cursor",
+                      dimension: "pricing",
+                      statement: "Cursor offers paid plans.",
+                      confidence: 0.9,
+                      competitor: { name: "Cursor" },
+                      chunks: [{ chunkId: "chunk_1" }]
+                    }
+                  },
+                  {
+                    fact: {
+                      id: "fact_2",
+                      projectId: "project_1",
+                      competitorId: "competitor_cursor",
+                      dimension: "product_capabilities",
+                      statement: "Cursor supports agentic workflows.",
+                      confidence: 0.86,
+                      competitor: { name: "Cursor" },
+                      chunks: [{ chunkId: "chunk_2" }]
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      reviewFindings: [
+        {
+          severity: "HIGH",
+          targetType: "claim",
+          targetId: "claim_1",
+          message: "Quality Agent found a severe issue."
+        }
+      ]
+    });
+
+    expect(penalized.averageScore).toBe((clean.averageScore ?? 0) - 15);
+    expect(penalized.nodes[0]?.penalties).toContainEqual({
+      code: "high_severity_critic_finding",
+      points: 15,
+      message: "Quality Agent found a severe issue."
+    });
+  });
 });

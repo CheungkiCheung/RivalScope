@@ -145,4 +145,50 @@ describe("evaluateClaimTrust", () => {
       message: "Claim claim_3 is supported by only one unique source."
     });
   });
+
+  it("applies targeted high-severity critic penalties to the matching claim", () => {
+    const clean = evaluateClaimTrust({
+      claim: {
+        id: "claim_1",
+        projectId: "project_1",
+        dimension: "product_capabilities",
+        statement: "Cursor combines paid plans with agentic coding workflows.",
+        factIds: ["fact_1", "fact_2"],
+        confidence: 0.86,
+        kind: "single_competitor"
+      },
+      facts,
+      chunks,
+      sources
+    });
+    const penalized = evaluateClaimTrust({
+      claim: {
+        id: "claim_1",
+        projectId: "project_1",
+        dimension: "product_capabilities",
+        statement: "Cursor combines paid plans with agentic coding workflows.",
+        factIds: ["fact_1", "fact_2"],
+        confidence: 0.86,
+        kind: "single_competitor"
+      },
+      facts,
+      chunks,
+      sources,
+      criticFindings: [
+        {
+          severity: "high",
+          targetType: "claim",
+          targetId: "claim_1",
+          message: "Quality Agent flagged this claim."
+        }
+      ]
+    });
+
+    expect(penalized.score).toBe(clean.score - 15);
+    expect(penalized.penalties).toContainEqual({
+      code: "high_severity_critic_finding",
+      points: 15,
+      message: "Quality Agent flagged this claim."
+    });
+  });
 });

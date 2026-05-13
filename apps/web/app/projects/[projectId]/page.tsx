@@ -78,7 +78,8 @@ export default async function ProjectPage({ params }: ProjectPageProps) {
   });
   const claimTrustSummary = buildProjectClaimTrustSummary({
     sources: project.sources,
-    reportSections
+    reportSections,
+    reviewFindings: latestFindings
   });
 
   return (
@@ -488,7 +489,15 @@ export default async function ProjectPage({ params }: ProjectPageProps) {
                   <div className="item" key={finding.id}>
                     <span className="status bad">{finding.severity}</span>
                     <strong>{finding.category}</strong>
+                    {finding.targetType && finding.targetId ? (
+                      <span className="muted">
+                        target {finding.targetType}:{finding.targetId}
+                      </span>
+                    ) : null}
                     <p className="muted">{finding.message}</p>
+                    {finding.repairSuggestion ? (
+                      <p className="muted">{finding.repairSuggestion}</p>
+                    ) : null}
                   </div>
                 ))}
               </div>
