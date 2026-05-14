@@ -34,10 +34,10 @@ The next stage is now organized around three judge-visible artifacts:
 2. **Competitor Intelligence Schema**: collection, extraction, analysis, coverage, report sections, and repair all use the same domain schema.
 3. **Claim Trust Graph with Repair Delta**: every important claim can be inspected, scored, challenged, and improved.
 
-The immediate next milestone is:
+The immediate next milestone after Phase 3 is:
 
 ```text
-Claim Trust Score + Claim Trust Graph + Thin Agent Trace
+Semantic Evidence Sufficiency + Source-Quality-Aware Repair
 ```
 
 ## Research Summary
@@ -201,14 +201,17 @@ Current limitation: Phase 2 records repair suggestions but does not execute repa
 
 Goal: prove that agent collaboration improves intelligence quality.
 
+Status: implemented for deterministic repair planning, repair application, and final quality delta.
+
 Tasks:
 
-1. Add a repair plan artifact.
-2. Add a deterministic Repair Agent or module before relying on LLM repair.
-3. Add draft eval, critique, repair, and final eval workflow nodes.
-4. Add repair action records tied to critic findings.
-5. Add before/after Claim Trust and IQS comparison.
-6. Add a seeded demo fixture where a weak draft improves after repair.
+1. Done: add `repair_result` and `final_eval` artifacts.
+2. Done: add deterministic Repair Planner, Apply Repair, and Final Evaluator agents before relying on LLM repair.
+3. Done: add critique, repair, apply-repair, and final-eval workflow nodes.
+4. Done: add repair action records tied to targeted critic findings.
+5. Done for first pass: add draft/final quality score delta in product UI.
+6. Pending: add before/after Claim Trust snapshots.
+7. Pending: add a seeded demo fixture where a weak draft visibly improves after repair.
 
 Acceptance criteria:
 
@@ -216,6 +219,13 @@ Acceptance criteria:
 - Unsupported claims can be removed or downgraded.
 - Missing dimensions can create explicit repair tasks or unresolved gaps.
 - At least one golden fixture proves score improvement.
+
+Current implementation notes:
+
+- Repair is conservative. It removes high-severity targeted unsupported/unknown-fact claim references from the report and records missing dimensions as unresolved gaps.
+- The workflow now runs `extract -> analyze -> write -> critique -> repair -> apply_repair -> final_eval`.
+- The project page shows `Repair Delta` plus a `Repair Loop` action history from persisted artifacts.
+- The next quality jump should add semantic evidence sufficiency, source authority scoring, and before/after Claim Trust snapshots so optimization is harder to game.
 
 ## Stage 1: Real Source Tooling
 

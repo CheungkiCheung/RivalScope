@@ -3,8 +3,11 @@ import { createWorkflow } from "@rivalscope/core";
 import {
   createAnalysisWorkflowAgents,
   createAnalystAgent,
+  createApplyRepairAgent,
   createCriticAgent,
   createExtractAgent,
+  createFinalEvaluatorAgent,
+  createRepairPlannerAgent,
   createWriterAgent
 } from "./analysis-agents";
 import { runAgent } from "./agent";
@@ -85,6 +88,83 @@ describe("workflow runner", () => {
       status: "approved",
       qualityScore: 100,
       findings: []
+    });
+  });
+
+  it("executes the repair loop and emits final quality delta", async () => {
+    const artifacts = new InMemoryArtifactStore();
+    const sourceArtifact = artifacts.put({
+      kind: "source_chunks",
+      value: {
+        projectId: "project_1",
+        chunks: [
+          {
+            id: "chunk_cursor_pricing",
+            sourceId: "src_cursor",
+            ordinal: 0,
+            text: "Cursor offers individual Pro and Team plans for AI coding.",
+            tokenCount: 10
+          }
+        ]
+      }
+    });
+    const requirementsArtifact = artifacts.put({
+      kind: "analysis_requirements",
+      value: {
+        competitors: [{ id: "competitor_cursor", name: "Cursor" }],
+        requiredDimensions: ["pricing", "developer_experience"]
+      }
+    });
+    const workflow = createWorkflow({
+      id: "workflow_1",
+      projectId: "project_1",
+      nodes: [
+        createWorkflowNode("extract", "extract", [], [
+          sourceArtifact.id,
+          requirementsArtifact.id
+        ]),
+        createWorkflowNode("analyze", "analyze", ["extract"]),
+        createWorkflowNode("write", "write", ["analyze"]),
+        createWorkflowNode("critique", "critique", ["write"]),
+        createWorkflowNode("repair", "repair", ["critique"]),
+        createWorkflowNode("apply_repair", "apply_repair", ["repair"]),
+        createWorkflowNode("final_eval", "final_eval", ["apply_repair"])
+      ]
+    });
+
+    const result = await runWorkflow({
+      workflow,
+      artifacts,
+      agents: createAnalysisWorkflowAgents()
+    });
+
+    expect(result.workflow.nodes.every((node) => node.status === "succeeded")).toBe(
+      true
+    );
+    expect(result.agentRuns.map((run) => run.nodeId)).toEqual([
+      "extract",
+      "analyze",
+      "write",
+      "critique",
+      "repair",
+      "apply_repair",
+      "final_eval"
+    ]);
+
+    const finalEvalNode = result.workflow.nodes.find(
+      (node) => node.id === "final_eval"
+    );
+    const finalEvalArtifact = artifacts.get(
+      finalEvalNode?.outputArtifactIds[0] ?? ""
+    );
+
+    expect(finalEvalArtifact?.kind).toBe("final_eval");
+    expect(finalEvalArtifact?.value).toMatchObject({
+      status: "unchanged",
+      draftQualityScore: 90,
+      repairedQualityScore: 90,
+      delta: 0,
+      unresolvedGaps: ["developer_experience"]
     });
   });
 
@@ -682,6 +762,245 @@ describe("critic agent", () => {
   });
 });
 
+describe("repair agent", () => {
+  it("plans targeted claim removals and unresolved dimension gaps without inventing claims", async () => {
+    const repair = createRepairPlannerAgent();
+
+    const result = await runAgent(repair, {
+      projectId: "project_1",
+      artifacts: [
+        createFactsArtifact(),
+        createClaimsArtifact([
+          {
+            id: "claim_supported",
+            projectId: "project_1",
+            dimension: "pricing",
+            statement: "Cursor has paid plans.",
+            factIds: ["fact_1"],
+            confidence: 0.84,
+            kind: "single_competitor"
+          },
+          {
+            id: "claim_unsupported",
+            projectId: "project_1",
+            dimension: "positioning",
+            statement: "Cursor beats every competitor.",
+            factIds: [],
+            confidence: 0.82,
+            kind: "comparative"
+          }
+        ]),
+        createReportArtifact([
+          {
+            id: "section_summary",
+            title: "Executive Summary",
+            body: [
+              "Cursor has paid plans.",
+              "Cursor beats every competitor."
+            ].join("\n"),
+            claimIds: ["claim_supported", "claim_unsupported"]
+          }
+        ]),
+        createReviewFindingsArtifact({
+          qualityScore: 70,
+          findings: [
+            {
+              id: "finding_claim_unsupported",
+              severity: "high",
+              category: "unsupported_claim",
+              message: "Claim claim_unsupported has no cited facts.",
+              targetType: "claim",
+              targetId: "claim_unsupported",
+              dimension: "positioning",
+              repairSuggestion: "Remove the claim."
+            },
+            {
+              id: "finding_missing_developer_experience",
+              severity: "medium",
+              category: "missing_dimension",
+              message: "Missing required dimension developer_experience.",
+              targetType: "dimension",
+              targetId: "developer_experience",
+              dimension: "developer_experience",
+              repairSuggestion: "Collect evidence for developer experience."
+            }
+          ]
+        })
+      ]
+    });
+
+    expect(result.output.kind).toBe("repair_result");
+    expect(result.output.value).toMatchObject({
+      projectId: "project_1",
+      draftQualityScore: 70,
+      plannedQualityScore: 90,
+      delta: 20,
+      actions: [
+        {
+          type: "remove_claim_from_report",
+          targetType: "claim",
+          targetId: "claim_unsupported",
+          severity: "high",
+          status: "planned"
+        },
+        {
+          type: "mark_dimension_gap",
+          targetType: "dimension",
+          targetId: "developer_experience",
+          severity: "medium",
+          status: "unresolved"
+        }
+      ],
+      unresolvedGaps: ["developer_experience"]
+    });
+  });
+
+  it("applies repair plans by removing unsafe claim references from the report", async () => {
+    const applyRepair = createApplyRepairAgent();
+
+    const result = await runAgent(applyRepair, {
+      projectId: "project_1",
+      artifacts: [
+        createClaimsArtifact([
+          {
+            id: "claim_supported",
+            projectId: "project_1",
+            dimension: "pricing",
+            statement: "Cursor has paid plans.",
+            factIds: ["fact_1"],
+            confidence: 0.84,
+            kind: "single_competitor"
+          },
+          {
+            id: "claim_unsupported",
+            projectId: "project_1",
+            dimension: "positioning",
+            statement: "Cursor beats every competitor.",
+            factIds: [],
+            confidence: 0.82,
+            kind: "comparative"
+          }
+        ]),
+        createReportArtifact([
+          {
+            id: "section_summary",
+            title: "Executive Summary",
+            body: [
+              "Cursor has paid plans.",
+              "Cursor beats every competitor."
+            ].join("\n"),
+            claimIds: ["claim_supported", "claim_unsupported"]
+          }
+        ]),
+        createRepairResultArtifact({
+          draftQualityScore: 70,
+          plannedQualityScore: 90,
+          actions: [
+            {
+              id: "repair_remove_claim_unsupported",
+              type: "remove_claim_from_report",
+              targetType: "claim",
+              targetId: "claim_unsupported",
+              severity: "high",
+              status: "planned",
+              reason: "Claim claim_unsupported has no cited facts.",
+              repairSuggestion: "Remove the claim."
+            }
+          ],
+          unresolvedGaps: []
+        })
+      ]
+    });
+
+    expect(result.output.kind).toBe("report");
+    expect(result.output.value).toMatchObject({
+      title: "Competitive Intelligence Report",
+      sections: [
+        {
+          id: "section_summary",
+          title: "Executive Summary",
+          body: "Cursor has paid plans.",
+          claimIds: ["claim_supported"]
+        }
+      ],
+      repair: {
+        appliedActionIds: ["repair_remove_claim_unsupported"],
+        removedClaimIds: ["claim_unsupported"]
+      }
+    });
+  });
+
+  it("summarizes final repair quality delta from the repaired report", async () => {
+    const finalEvaluator = createFinalEvaluatorAgent();
+
+    const result = await runAgent(finalEvaluator, {
+      projectId: "project_1",
+      artifacts: [
+        createRepairResultArtifact({
+          draftQualityScore: 70,
+          plannedQualityScore: 90,
+          actions: [
+            {
+              id: "repair_remove_claim_unsupported",
+              type: "remove_claim_from_report",
+              targetType: "claim",
+              targetId: "claim_unsupported",
+              severity: "high",
+              status: "applied",
+              reason: "Claim claim_unsupported has no cited facts.",
+              repairSuggestion: "Remove the claim."
+            },
+            {
+              id: "repair_gap_developer_experience",
+              type: "mark_dimension_gap",
+              targetType: "dimension",
+              targetId: "developer_experience",
+              severity: "medium",
+              status: "unresolved",
+              reason: "Missing required dimension developer_experience.",
+              repairSuggestion: "Collect evidence for developer experience."
+            }
+          ],
+          unresolvedGaps: ["developer_experience"]
+        }),
+        createReportArtifact(
+          [
+            {
+              id: "section_summary",
+              title: "Executive Summary",
+              body: "Cursor has paid plans.",
+              claimIds: ["claim_supported"]
+            }
+          ],
+          {
+            appliedActionIds: ["repair_remove_claim_unsupported"],
+            removedClaimIds: ["claim_unsupported"]
+          }
+        )
+      ]
+    });
+
+    expect(result.output.kind).toBe("final_eval");
+    expect(result.output.value).toMatchObject({
+      status: "improved",
+      draftQualityScore: 70,
+      repairedQualityScore: 90,
+      delta: 20,
+      actions: [
+        {
+          id: "repair_remove_claim_unsupported",
+          status: "applied"
+        },
+        {
+          id: "repair_gap_developer_experience",
+          status: "unresolved"
+        }
+      ],
+      unresolvedGaps: ["developer_experience"]
+    });
+  });
+});
+
 describe("writer agent", () => {
   it("rejects report sections that cite unknown claims before emitting a report artifact", async () => {
     const writer = createWriterAgent({
@@ -790,6 +1109,98 @@ function createFactsArtifact() {
           confidence: 0.91
         }
       ]
+    }
+  };
+}
+
+function createClaimsArtifact(
+  claims: Array<{
+    id: string;
+    projectId: string;
+    dimension: string;
+    statement: string;
+    factIds: string[];
+    confidence: number;
+    kind: string;
+  }>
+) {
+  return {
+    id: "artifact_claims",
+    kind: "claims" as const,
+    createdAt: "2026-05-11T00:00:02.000Z",
+    value: { claims }
+  };
+}
+
+function createReportArtifact(
+  sections: Array<{
+    id: string;
+    title: string;
+    body: string;
+    claimIds: string[];
+  }>,
+  repair?: {
+    appliedActionIds: string[];
+    removedClaimIds: string[];
+  }
+) {
+  return {
+    id: "artifact_report",
+    kind: "report" as const,
+    createdAt: "2026-05-11T00:00:03.000Z",
+    value: {
+      projectId: "project_1",
+      title: "Competitive Intelligence Report",
+      sections,
+      ...(repair ? { repair } : {})
+    }
+  };
+}
+
+function createReviewFindingsArtifact(value: {
+  qualityScore: number;
+  findings: Array<{
+    id: string;
+    severity: string;
+    category: string;
+    message: string;
+    targetType: string;
+    targetId: string;
+    dimension?: string;
+    repairSuggestion: string;
+  }>;
+}) {
+  return {
+    id: "artifact_review_findings",
+    kind: "review_findings" as const,
+    createdAt: "2026-05-11T00:00:04.000Z",
+    value
+  };
+}
+
+function createRepairResultArtifact(value: {
+  draftQualityScore: number;
+  plannedQualityScore: number;
+  actions: Array<{
+    id: string;
+    type: string;
+    targetType: string;
+    targetId: string;
+    severity: string;
+    status: string;
+    reason: string;
+    repairSuggestion: string;
+  }>;
+  unresolvedGaps: string[];
+}) {
+  return {
+    id: "artifact_repair_result",
+    kind: "repair_result" as const,
+    createdAt: "2026-05-11T00:00:05.000Z",
+    value: {
+      projectId: "project_1",
+      ...value,
+      delta: value.plannedQualityScore - value.draftQualityScore
     }
   };
 }

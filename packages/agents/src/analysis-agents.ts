@@ -54,6 +54,34 @@ export interface ReportSectionDraft {
   claimIds: string[];
 }
 
+export type RepairActionType =
+  | "remove_claim_from_report"
+  | "mark_dimension_gap"
+  | "keep_with_warning";
+
+export type RepairActionStatus = "planned" | "applied" | "unresolved";
+
+export interface RepairAction {
+  id: string;
+  type: RepairActionType;
+  targetType: ReviewFindingTargetType;
+  targetId: string;
+  severity: ReviewFinding["severity"];
+  status: RepairActionStatus;
+  reason: string;
+  repairSuggestion: string;
+  dimension?: string;
+}
+
+export interface RepairResult {
+  projectId: string;
+  draftQualityScore: number;
+  plannedQualityScore: number;
+  delta: number;
+  actions: RepairAction[];
+  unresolvedGaps: string[];
+}
+
 export interface WriterAgentOptions {
   buildSections?(claims: Claim[]): ReportSectionDraft[];
 }
@@ -65,7 +93,10 @@ export function createAnalysisWorkflowAgents(
     extract: createExtractAgent(options),
     analyze: createAnalystAgent(options),
     write: createWriterAgent(),
-    critique: createCriticAgent()
+    critique: createCriticAgent(),
+    repair: createRepairPlannerAgent(),
+    apply_repair: createApplyRepairAgent(),
+    final_eval: createFinalEvaluatorAgent()
   };
 }
 
@@ -536,6 +567,214 @@ export function createCriticAgent(): WorkflowAgent {
   };
 }
 
+export function createRepairPlannerAgent(): WorkflowAgent {
+  return {
+    name: "repair",
+    role: "Plans deterministic repairs from targeted critic findings.",
+    inputSchema: workflowAgentInputSchema,
+    outputSchema: workflowAgentOutputSchema,
+    run: async (input) => {
+      const review = getLatestArtifactValue<{
+        qualityScore: number;
+        findings: ReviewFinding[];
+      }>(input.artifacts, "review_findings");
+      const actions = buildRepairActions(review.findings);
+      const actionablePenalty = actions
+        .filter((action) => action.status === "planned")
+        .reduce((total, action) => total + severityPenalty(action.severity), 0);
+      const plannedQualityScore = clampScore(
+        review.qualityScore + actionablePenalty
+      );
+      const unresolvedGaps = actions
+        .filter((action) => action.type === "mark_dimension_gap")
+        .map((action) => action.targetId);
+
+      return {
+        kind: "repair_result",
+        value: {
+          projectId: input.projectId,
+          draftQualityScore: review.qualityScore,
+          plannedQualityScore,
+          delta: plannedQualityScore - review.qualityScore,
+          actions,
+          unresolvedGaps
+        } satisfies RepairResult
+      };
+    }
+  };
+}
+
+export function createApplyRepairAgent(): WorkflowAgent {
+  return {
+    name: "apply_repair",
+    role: "Applies deterministic repair plans to the report without inventing evidence.",
+    inputSchema: workflowAgentInputSchema,
+    outputSchema: workflowAgentOutputSchema,
+    run: async (input) => {
+      const claims = getLatestArtifactValue<{ claims: Claim[] }>(
+        input.artifacts,
+        "claims"
+      ).claims;
+      const report = getLatestArtifactValue<{
+        title: string;
+        sections: ReportSectionDraft[];
+      }>(input.artifacts, "report");
+      const repair = getLatestArtifactValue<RepairResult>(
+        input.artifacts,
+        "repair_result"
+      );
+      const claimById = new Map(claims.map((claim) => [claim.id, claim]));
+      const removalActions = repair.actions.filter(
+        (action) =>
+          action.type === "remove_claim_from_report" &&
+          action.status === "planned"
+      );
+      const removedClaimIds = new Set(
+        removalActions.map((action) => action.targetId)
+      );
+      const removedStatements = new Set(
+        removalActions
+          .map((action) => claimById.get(action.targetId)?.statement)
+          .filter((statement): statement is string => statement !== undefined)
+      );
+      const sections = report.sections.map((section) => ({
+        ...section,
+        body: removeClaimStatementLines(section.body, removedStatements),
+        claimIds: section.claimIds.filter((claimId) => !removedClaimIds.has(claimId))
+      }));
+
+      return {
+        kind: "report",
+        value: {
+          projectId: input.projectId,
+          title: report.title,
+          sections,
+          repair: {
+            appliedActionIds: removalActions.map((action) => action.id),
+            removedClaimIds: Array.from(removedClaimIds)
+          }
+        }
+      };
+    }
+  };
+}
+
+export function createFinalEvaluatorAgent(): WorkflowAgent {
+  return {
+    name: "final_eval",
+    role: "Summarizes repair-loop quality deltas.",
+    inputSchema: workflowAgentInputSchema,
+    outputSchema: workflowAgentOutputSchema,
+    run: async (input) => {
+      const repair = getLatestArtifactValue<RepairResult>(
+        input.artifacts,
+        "repair_result"
+      );
+      const report = getLatestArtifactValue<{
+        repair?: {
+          appliedActionIds?: string[];
+        };
+      }>(input.artifacts, "report");
+      const appliedActionIds = new Set(report.repair?.appliedActionIds ?? []);
+      const actions = repair.actions.map((action) => ({
+        ...action,
+        status: getFinalActionStatus(action, appliedActionIds)
+      }));
+      const repairedQualityScore = clampScore(
+        repair.draftQualityScore +
+          actions
+            .filter((action) => action.status === "applied")
+            .reduce((total, action) => total + severityPenalty(action.severity), 0)
+      );
+      const delta = repairedQualityScore - repair.draftQualityScore;
+
+      return {
+        kind: "final_eval",
+        value: {
+          projectId: input.projectId,
+          status: delta > 0 ? "improved" : "unchanged",
+          draftQualityScore: repair.draftQualityScore,
+          repairedQualityScore,
+          delta,
+          actions,
+          unresolvedGaps: repair.unresolvedGaps
+        }
+      };
+    }
+  };
+}
+
+function buildRepairActions(findings: ReviewFinding[]): RepairAction[] {
+  return findings.map((finding) => {
+    if (
+      finding.severity === "high" &&
+      finding.targetType === "claim" &&
+      (finding.category === "unsupported_claim" ||
+        finding.category === "unknown_fact")
+    ) {
+      return {
+        id: `repair_remove_${finding.targetId}`,
+        type: "remove_claim_from_report",
+        targetType: finding.targetType,
+        targetId: finding.targetId,
+        severity: finding.severity,
+        status: "planned",
+        reason: finding.message,
+        repairSuggestion: finding.repairSuggestion,
+        ...(finding.dimension ? { dimension: finding.dimension } : {})
+      };
+    }
+
+    if (finding.category === "missing_dimension") {
+      return {
+        id: `repair_gap_${finding.targetId}`,
+        type: "mark_dimension_gap",
+        targetType: finding.targetType,
+        targetId: finding.targetId,
+        severity: finding.severity,
+        status: "unresolved",
+        reason: finding.message,
+        repairSuggestion: finding.repairSuggestion,
+        ...(finding.dimension ? { dimension: finding.dimension } : {})
+      };
+    }
+
+    return {
+      id: `repair_warn_${finding.targetType}_${finding.targetId}`,
+      type: "keep_with_warning",
+      targetType: finding.targetType,
+      targetId: finding.targetId,
+      severity: finding.severity,
+      status: "unresolved",
+      reason: finding.message,
+      repairSuggestion: finding.repairSuggestion,
+      ...(finding.dimension ? { dimension: finding.dimension } : {})
+    };
+  });
+}
+
+function getFinalActionStatus(
+  action: RepairAction,
+  appliedActionIds: Set<string>
+): RepairActionStatus {
+  if (action.status === "planned" && appliedActionIds.has(action.id)) {
+    return "applied";
+  }
+
+  return action.status;
+}
+
+function removeClaimStatementLines(
+  body: string,
+  removedStatements: Set<string>
+): string {
+  return body
+    .split("\n")
+    .filter((line) => !removedStatements.has(line.trim()))
+    .join("\n")
+    .trim();
+}
+
 function inferCompetitorId(
   chunk: SourceChunk,
   competitors: AnalysisRequirementCompetitor[]
@@ -605,4 +844,20 @@ function calculateQualityScore(findings: ReviewFinding[]): number {
   }, 0);
 
   return Math.max(0, 100 - penalty);
+}
+
+function severityPenalty(severity: ReviewFinding["severity"]): number {
+  if (severity === "high") {
+    return 20;
+  }
+
+  if (severity === "medium") {
+    return 10;
+  }
+
+  return 5;
+}
+
+function clampScore(score: number): number {
+  return Math.max(0, Math.min(100, score));
 }

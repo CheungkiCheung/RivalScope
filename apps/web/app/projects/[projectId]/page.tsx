@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { ProjectRepository, prisma } from "@rivalscope/db";
 import { buildProjectClaimTrustSummary } from "../../../lib/project-claim-trust";
 import { buildProjectEvalSummary } from "../../../lib/project-eval-summary";
+import { buildProjectRepairSummary } from "../../../lib/project-repair-summary";
 import { runAnalysis } from "../../../lib/run-analysis";
 
 export const dynamic = "force-dynamic";
@@ -81,6 +82,9 @@ export default async function ProjectPage({ params }: ProjectPageProps) {
     reportSections,
     reviewFindings: latestFindings
   });
+  const repairSummary = buildProjectRepairSummary({
+    artifacts: project.artifacts
+  });
 
   return (
     <main className="shell">
@@ -124,6 +128,16 @@ export default async function ProjectPage({ params }: ProjectPageProps) {
         <div className="metric">
           <span className="metric-label">Claim Trust</span>
           <strong>{claimTrustSummary.averageScore ?? "—"}</strong>
+        </div>
+        <div className="metric">
+          <span className="metric-label">Repair Delta</span>
+          <strong>
+            {repairSummary.delta === null
+              ? "—"
+              : repairSummary.delta > 0
+                ? `+${repairSummary.delta}`
+                : repairSummary.delta}
+          </strong>
         </div>
         <div className="metric">
           <span className="metric-label">Model Calls</span>
@@ -296,6 +310,62 @@ export default async function ProjectPage({ params }: ProjectPageProps) {
                     ) : null}
                   </div>
                 ))}
+              </div>
+            )}
+          </section>
+
+          <section className="card">
+            <h3>Repair Loop</h3>
+            {repairSummary.status === "not_started" ? (
+              <p className="muted">No repair evaluation has been generated yet.</p>
+            ) : (
+              <div className="eval-panel">
+                <div className="eval-metrics">
+                  <div className="trace-summary">
+                    <span className="metric-label">Draft</span>
+                    <strong>{repairSummary.draftQualityScore}</strong>
+                  </div>
+                  <div className="trace-summary">
+                    <span className="metric-label">Final</span>
+                    <strong>{repairSummary.repairedQualityScore}</strong>
+                  </div>
+                  <div className="trace-summary">
+                    <span className="metric-label">Delta</span>
+                    <strong>
+                      {repairSummary.delta && repairSummary.delta > 0
+                        ? `+${repairSummary.delta}`
+                        : repairSummary.delta}
+                    </strong>
+                  </div>
+                </div>
+                <div className="list">
+                  {repairSummary.actions.map((action) => (
+                    <div className="item compact-item" key={action.id}>
+                      <div className="item-head">
+                        <strong>{action.type}</strong>
+                        <span
+                          className={`status ${
+                            action.status === "applied" ? "ok" : "warn"
+                          }`}
+                        >
+                          {action.status}
+                        </span>
+                      </div>
+                      <span className="muted">
+                        {action.targetType}:{action.targetId} · {action.severity}
+                      </span>
+                      <p className="muted">{action.reason}</p>
+                    </div>
+                  ))}
+                  {repairSummary.unresolvedGaps.map((gap) => (
+                    <div className="item compact-item" key={gap}>
+                      <div className="item-head">
+                        <strong>{gap}</strong>
+                        <span className="status warn">gap</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
           </section>

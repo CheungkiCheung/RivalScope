@@ -101,7 +101,10 @@ function resolveInputArtifacts(
   const upstreamArtifactIds = workflow.nodes
     .filter((candidate) => upstreamNodeIds.has(candidate.id))
     .filter((candidate) => candidate.status === "succeeded")
-    .flatMap((candidate) => candidate.outputArtifactIds);
+    .flatMap((candidate) => [
+      ...candidate.inputArtifactIds,
+      ...candidate.outputArtifactIds
+    ]);
   const artifactIds = Array.from(
     new Set([...node.inputArtifactIds, ...upstreamArtifactIds])
   );

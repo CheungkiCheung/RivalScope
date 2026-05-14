@@ -4,7 +4,9 @@ export type ArtifactKind =
   | "facts"
   | "claims"
   | "report"
-  | "review_findings";
+  | "review_findings"
+  | "repair_result"
+  | "final_eval";
 
 export interface Artifact<T = unknown> {
   id: string;

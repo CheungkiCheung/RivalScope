@@ -458,21 +458,27 @@ Current limitation: Phase 2 records repair suggestions but does not execute repa
 
 Goal: prove multi-agent collaboration improves quality.
 
+Status: implemented for deterministic repair execution and judge-visible repair delta.
+
 Required deliverables:
 
-- Repair plan artifact.
-- Repair agent or deterministic repair module.
-- Workflow nodes for draft eval, critique, repair, and final eval.
-- Repair history UI.
-- Score delta metrics.
-- Before/after Claim Trust and IQS comparison.
+- Done: add `repair_result` and `final_eval` artifacts.
+- Done: add deterministic Repair Planner, Apply Repair, and Final Evaluator agents.
+- Done: extend the workflow from `extract -> analyze -> write -> critique` to `extract -> analyze -> write -> critique -> repair -> apply_repair -> final_eval`.
+- Done: repair high-severity targeted `unsupported_claim` / `unknown_fact` claim findings by removing unsafe claim references from the final report.
+- Done: preserve missing dimensions as explicit unresolved gaps instead of inventing unsupported claims.
+- Done: expose Repair Delta and Repair Loop actions on the project page.
+- Done: persist repair/final-eval artifacts through the generic artifact store and load recent artifacts in `ProjectRepository.get()`.
+- Partial: before/after IQS comparison exists for critic quality score delta; full Claim Trust before/after snapshots are still pending.
 
 Phase 3 completion gate:
 
 - Demo can show draft score, repair actions, and final score.
-- Unsupported claims can be removed or downgraded.
-- Missing dimensions can trigger explicit repair tasks or gaps.
-- At least one seeded demo fixture shows an IQS improvement after repair.
+- Unsupported claims can be removed from the final report.
+- Missing dimensions trigger explicit unresolved gaps.
+- Targeted tests prove repair planning, application, final evaluation, and production DAG shape.
+
+Current limitation: Phase 3 repair is deterministic and conservative. It removes unsafe claim references and records gaps, but does not yet perform semantic evidence sufficiency checks, source-authority weighting, LLM-backed evidence search, or persisted before/after Claim Trust snapshots. The next optimization should make repair target selection source-quality-aware and add a seeded demo case where one weak draft visibly improves while unresolved gaps remain honest.
 
 ### Phase 4: Routed Research DAG
 

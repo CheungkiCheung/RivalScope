@@ -169,6 +169,10 @@ export class ProjectRepository {
         competitors: true,
         analysisDimensions: true,
         sources: { include: { chunks: true } },
+        artifacts: {
+          orderBy: { createdAt: "desc" },
+          take: 30
+        },
         workflows: {
           orderBy: { createdAt: "desc" },
           take: 1,

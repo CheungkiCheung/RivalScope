@@ -124,7 +124,7 @@ export function buildAnalysisRequirements(project: {
   };
 }
 
-function buildMvpWorkflowNodes(inputArtifactIds: string[]): WorkflowNode[] {
+export function buildMvpWorkflowNodes(inputArtifactIds: string[]): WorkflowNode[] {
   return [
     {
       id: "extract",
@@ -164,6 +164,39 @@ function buildMvpWorkflowNodes(inputArtifactIds: string[]): WorkflowNode[] {
       type: "agent",
       agentName: "critique",
       dependsOn: ["write"],
+      status: "pending",
+      inputArtifactIds: [],
+      outputArtifactIds: [],
+      retryCount: 0,
+      maxRetries: 1
+    },
+    {
+      id: "repair",
+      type: "agent",
+      agentName: "repair",
+      dependsOn: ["critique"],
+      status: "pending",
+      inputArtifactIds: [],
+      outputArtifactIds: [],
+      retryCount: 0,
+      maxRetries: 1
+    },
+    {
+      id: "apply_repair",
+      type: "agent",
+      agentName: "apply_repair",
+      dependsOn: ["repair"],
+      status: "pending",
+      inputArtifactIds: [],
+      outputArtifactIds: [],
+      retryCount: 0,
+      maxRetries: 1
+    },
+    {
+      id: "final_eval",
+      type: "agent",
+      agentName: "final_eval",
+      dependsOn: ["apply_repair"],
       status: "pending",
       inputArtifactIds: [],
       outputArtifactIds: [],

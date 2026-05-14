@@ -25,7 +25,9 @@ export const workflowAgentInputSchema = z.object({
         "facts",
         "claims",
         "report",
-        "review_findings"
+        "review_findings",
+        "repair_result",
+        "final_eval"
       ]),
       value: z.unknown(),
       createdAt: z.string()
@@ -40,7 +42,9 @@ export const workflowAgentOutputSchema = z.object({
     "facts",
     "claims",
     "report",
-    "review_findings"
+    "review_findings",
+    "repair_result",
+    "final_eval"
   ]),
   value: z.unknown()
 }) as z.ZodType<WorkflowAgentOutput>;
