@@ -56,6 +56,12 @@ export interface ProjectRepairJudgeComparisonSummary {
   disagreementsCount: number;
   judges: ProjectRepairJudgeSummary[];
   disagreements: ProjectRepairJudgeDisagreement[];
+  gateStatus: "clear" | "review" | "blocked" | "partial";
+  highRiskDisagreementsCount: number;
+  highRiskDisagreements: ProjectRepairHighRiskDisagreement[];
+  lowRiskDisagreementsCount: number;
+  status?: "succeeded" | "partial";
+  errorMessage?: string;
 }
 
 export interface ProjectRepairJudgeSummary {
@@ -68,6 +74,21 @@ export interface ProjectRepairJudgeSummary {
 export interface ProjectRepairJudgeDisagreement {
   caseId: string;
   labels: Record<string, string>;
+  claimId?: string;
+  statement?: string;
+  dimension?: string;
+  expectedLabel?: string;
+}
+
+export interface ProjectRepairHighRiskDisagreement
+  extends ProjectRepairJudgeDisagreement {
+  claimId: string;
+  statement: string;
+  dimension: string;
+  expectedLabel: string;
+  gate: "human_review" | "conservative_remove";
+  severity: string;
+  reason: string;
 }
 
 export function buildProjectRepairSummary(
@@ -86,7 +107,7 @@ export function buildProjectRepairSummary(
   const judgeComparison = [...input.artifacts]
     .filter((artifact) => artifact.kind === "entailment_judge_comparison")
     .sort((left, right) => right.createdAt.getTime() - left.createdAt.getTime())
-    .map((artifact) => parseJudgeComparison(artifact.value))
+    .map((artifact) => parseJudgeComparison(artifact.value, claimTrust))
     .find(
       (value): value is ProjectRepairJudgeComparisonSummary => value !== null
     );
@@ -245,7 +266,8 @@ function parseClaimTrustRow(value: unknown): ProjectRepairClaimTrustRow | null {
 }
 
 function parseJudgeComparison(
-  value: unknown
+  value: unknown,
+  claimTrust?: ProjectRepairClaimTrustSummary
 ): ProjectRepairJudgeComparisonSummary | null {
   if (!isRecord(value)) {
     return null;
@@ -259,15 +281,60 @@ function parseJudgeComparison(
     return null;
   }
 
+  const cases = Array.isArray(value.cases)
+    ? value.cases.map(parseJudgeComparisonCase).filter(isJudgeComparisonCase)
+    : [];
+  const caseById = new Map(cases.map((comparisonCase) => [
+    comparisonCase.caseId,
+    comparisonCase
+  ]));
+  const policyDecisions = Array.isArray(value.policyDecisions)
+    ? value.policyDecisions
+        .map(parseJudgePolicyDecision)
+        .filter(isJudgePolicyDecision)
+    : [];
+  const policyByCaseId = new Map(
+    policyDecisions.map((decision) => [decision.caseId, decision])
+  );
   const disagreements = value.disagreements
-    .map(parseJudgeDisagreement)
+    .map((disagreement) => parseJudgeDisagreement(disagreement, caseById))
     .filter(isJudgeDisagreement);
+  const highRiskDisagreements = disagreements
+    .map((disagreement) => {
+      const decision = policyByCaseId.get(disagreement.caseId);
+
+      return buildHighRiskDisagreement({
+        disagreement,
+        ...(decision ? { decision } : {}),
+        ...(claimTrust ? { claimTrust } : {})
+      });
+    })
+    .filter(isHighRiskDisagreement);
+  const lowRiskDisagreementsCount =
+    disagreements.length - highRiskDisagreements.length;
+  const status =
+    value.status === "succeeded" || value.status === "partial"
+      ? value.status
+      : undefined;
+  const errorMessage =
+    typeof value.errorMessage === "string" ? value.errorMessage : undefined;
 
   return {
     totalCases: value.totalCases,
     disagreementsCount: disagreements.length,
     judges: value.judges.map(parseJudgeSummary).filter(isJudgeSummary),
-    disagreements
+    disagreements,
+    gateStatus: getJudgeGateStatus({
+      ...(status ? { status } : {}),
+      ...(errorMessage ? { errorMessage } : {}),
+      highRiskDisagreementsCount: highRiskDisagreements.length,
+      lowRiskDisagreementsCount
+    }),
+    highRiskDisagreementsCount: highRiskDisagreements.length,
+    highRiskDisagreements,
+    lowRiskDisagreementsCount,
+    ...(status ? { status } : {}),
+    ...(errorMessage ? { errorMessage } : {})
   };
 }
 
@@ -294,7 +361,8 @@ function parseJudgeSummary(value: unknown): ProjectRepairJudgeSummary | null {
 }
 
 function parseJudgeDisagreement(
-  value: unknown
+  value: unknown,
+  casesById: Map<string, ProjectRepairJudgeComparisonCase>
 ): ProjectRepairJudgeDisagreement | null {
   if (!isRecord(value) || typeof value.caseId !== "string") {
     return null;
@@ -304,14 +372,168 @@ function parseJudgeDisagreement(
     return null;
   }
 
+  const comparisonCase = casesById.get(value.caseId);
+
   return {
     caseId: value.caseId,
     labels: Object.fromEntries(
       Object.entries(value.labels).filter(
         (entry): entry is [string, string] => typeof entry[1] === "string"
       )
-    )
+    ),
+    ...(comparisonCase
+      ? {
+          claimId: comparisonCase.claimId,
+          statement: comparisonCase.statement,
+          dimension: comparisonCase.dimension,
+          expectedLabel: comparisonCase.expectedLabel
+        }
+      : {})
   };
+}
+
+interface ProjectRepairJudgeComparisonCase {
+  caseId: string;
+  claimId: string;
+  statement: string;
+  dimension: string;
+  expectedLabel: string;
+}
+
+interface ProjectRepairJudgePolicyDecision {
+  caseId: string;
+  claimId: string;
+  gate: "clear" | "human_review" | "conservative_remove";
+  severity: string;
+  reason: string;
+}
+
+function parseJudgeComparisonCase(
+  value: unknown
+): ProjectRepairJudgeComparisonCase | null {
+  if (!isRecord(value)) {
+    return null;
+  }
+
+  if (
+    typeof value.caseId !== "string" ||
+    typeof value.claimId !== "string" ||
+    typeof value.statement !== "string" ||
+    typeof value.dimension !== "string" ||
+    typeof value.expectedLabel !== "string"
+  ) {
+    return null;
+  }
+
+  return {
+    caseId: value.caseId,
+    claimId: value.claimId,
+    statement: value.statement,
+    dimension: value.dimension,
+    expectedLabel: value.expectedLabel
+  };
+}
+
+function parseJudgePolicyDecision(
+  value: unknown
+): ProjectRepairJudgePolicyDecision | null {
+  if (!isRecord(value)) {
+    return null;
+  }
+
+  if (
+    typeof value.caseId !== "string" ||
+    typeof value.claimId !== "string" ||
+    (value.gate !== "clear" &&
+      value.gate !== "human_review" &&
+      value.gate !== "conservative_remove") ||
+    typeof value.severity !== "string" ||
+    typeof value.reason !== "string"
+  ) {
+    return null;
+  }
+
+  return {
+    caseId: value.caseId,
+    claimId: value.claimId,
+    gate: value.gate,
+    severity: value.severity,
+    reason: value.reason
+  };
+}
+
+function buildHighRiskDisagreement(input: {
+  disagreement: ProjectRepairJudgeDisagreement;
+  decision?: ProjectRepairJudgePolicyDecision;
+  claimTrust?: ProjectRepairClaimTrustSummary;
+}): ProjectRepairHighRiskDisagreement | null {
+  if (
+    !input.decision ||
+    (input.decision.gate !== "human_review" &&
+      input.decision.gate !== "conservative_remove")
+  ) {
+    return null;
+  }
+
+  if (
+    !input.disagreement.claimId ||
+    !input.disagreement.statement ||
+    !input.disagreement.dimension ||
+    !input.disagreement.expectedLabel
+  ) {
+    return null;
+  }
+
+  const trustRow = input.claimTrust?.claims.find(
+    (claim) => claim.claimId === input.disagreement.claimId
+  );
+  const highRiskByTrust =
+    trustRow?.draftRiskLevel === "high" ||
+    trustRow?.finalRiskLevel === "high" ||
+    trustRow?.penalties.some((penalty) =>
+      [
+        "insufficient_semantic_support",
+        "unsupported_claim",
+        "low_source_authority"
+      ].includes(penalty)
+    ) === true;
+  const highRiskByPolicy = input.decision.severity === "high";
+
+  if (!highRiskByTrust && !highRiskByPolicy) {
+    return null;
+  }
+
+  return {
+    ...input.disagreement,
+    claimId: input.disagreement.claimId,
+    statement: input.disagreement.statement,
+    dimension: input.disagreement.dimension,
+    expectedLabel: input.disagreement.expectedLabel,
+    gate: input.decision.gate,
+    severity: input.decision.severity,
+    reason: input.decision.reason
+  };
+}
+
+function getJudgeGateStatus(input: {
+  status?: "succeeded" | "partial";
+  errorMessage?: string;
+  highRiskDisagreementsCount: number;
+  lowRiskDisagreementsCount: number;
+}): ProjectRepairJudgeComparisonSummary["gateStatus"] {
+  if (input.highRiskDisagreementsCount > 0) {
+    return "review";
+  }
+
+  if (input.status === "partial" || input.errorMessage) {
+    return "partial";
+  }
+
+  if (input.lowRiskDisagreementsCount > 0) {
+    return "review";
+  }
+
+  return "clear";
 }
 
 function isRepairAction(
@@ -347,5 +569,23 @@ function isJudgeSummary(
 function isJudgeDisagreement(
   disagreement: ProjectRepairJudgeDisagreement | null
 ): disagreement is ProjectRepairJudgeDisagreement {
+  return disagreement !== null;
+}
+
+function isJudgeComparisonCase(
+  comparisonCase: ProjectRepairJudgeComparisonCase | null
+): comparisonCase is ProjectRepairJudgeComparisonCase {
+  return comparisonCase !== null;
+}
+
+function isJudgePolicyDecision(
+  decision: ProjectRepairJudgePolicyDecision | null
+): decision is ProjectRepairJudgePolicyDecision {
+  return decision !== null;
+}
+
+function isHighRiskDisagreement(
+  disagreement: ProjectRepairHighRiskDisagreement | null
+): disagreement is ProjectRepairHighRiskDisagreement {
   return disagreement !== null;
 }

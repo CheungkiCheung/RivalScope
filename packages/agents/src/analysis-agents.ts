@@ -72,7 +72,8 @@ export interface ReportSectionDraft {
 export type RepairActionType =
   | "remove_claim_from_report"
   | "mark_dimension_gap"
-  | "keep_with_warning";
+  | "keep_with_warning"
+  | "request_human_review";
 
 export type RepairActionStatus = "planned" | "applied" | "unresolved";
 
@@ -144,6 +145,17 @@ export interface EntailmentJudgeComparisonArtifact
   status: "succeeded" | "partial";
   errorMessage?: string;
   cases: EntailmentJudgeComparisonCase[];
+  policyDecisions: EntailmentRepairPolicyDecision[];
+}
+
+export interface EntailmentRepairPolicyDecision {
+  caseId: string;
+  claimId: string;
+  gate: "clear" | "human_review" | "conservative_remove";
+  severity: ReviewFinding["severity"];
+  reason: string;
+  labels: Record<string, EntailmentLabel>;
+  dimension?: string;
 }
 
 export interface WriterAgentOptions {
@@ -703,13 +715,22 @@ export function createRepairPlannerAgent(): WorkflowAgent {
         input.artifacts,
         "sources"
       )?.sources ?? [];
-      const actions = dedupeRepairActions([
+      const judgeComparison =
+        getOptionalLatestArtifactValue<EntailmentJudgeComparisonArtifact>(
+          input.artifacts,
+          "entailment_judge_comparison"
+        );
+      const actions = prioritizeRepairActions([
         ...buildRepairActions(review.findings),
         ...buildTrustRepairActions({
           claims,
           facts,
           chunks,
           sources
+        }),
+        ...buildEntailmentDisagreementRepairActions({
+          ...(judgeComparison ? { comparison: judgeComparison } : {}),
+          claims
         })
       ]);
       const actionablePenalty = actions
@@ -719,8 +740,16 @@ export function createRepairPlannerAgent(): WorkflowAgent {
         review.qualityScore + actionablePenalty
       );
       const unresolvedGaps = actions
-        .filter((action) => action.type === "mark_dimension_gap")
-        .map((action) => action.targetId);
+        .filter(
+          (action) =>
+            action.type === "mark_dimension_gap" ||
+            action.type === "request_human_review"
+        )
+        .map((action) =>
+          action.type === "request_human_review"
+            ? `claim_review:${action.targetId}`
+            : action.targetId
+        );
 
       return {
         kind: "repair_result",
@@ -965,6 +994,18 @@ export function createEntailmentJudgeComparisonAgent(
       const labelsByCase = new Map(
         comparison.caseLabels.map((entry) => [entry.caseId, entry.labels])
       );
+      const comparisonCases = cases.map((benchmarkCase) => ({
+        caseId: benchmarkCase.id,
+        claimId: benchmarkCase.claim.id,
+        statement: benchmarkCase.claim.statement,
+        dimension: benchmarkCase.claim.dimension,
+        expectedLabel: benchmarkCase.expectedLabel,
+        labels: labelsByCase.get(benchmarkCase.id) ?? {}
+      }));
+      const policyDecisions = buildEntailmentRepairPolicyDecisions({
+        comparison,
+        cases: comparisonCases
+      });
 
       return {
         kind: "entailment_judge_comparison",
@@ -972,14 +1013,8 @@ export function createEntailmentJudgeComparisonAgent(
           projectId: input.projectId,
           ...comparison,
           status: comparison.errorMessage ? "partial" : "succeeded",
-          cases: cases.map((benchmarkCase) => ({
-            caseId: benchmarkCase.id,
-            claimId: benchmarkCase.claim.id,
-            statement: benchmarkCase.claim.statement,
-            dimension: benchmarkCase.claim.dimension,
-            expectedLabel: benchmarkCase.expectedLabel,
-            labels: labelsByCase.get(benchmarkCase.id) ?? {}
-          }))
+          cases: comparisonCases,
+          policyDecisions
         } satisfies EntailmentJudgeComparisonArtifact
       };
     }
@@ -1160,21 +1195,142 @@ function buildTrustRepairActions(input: {
   });
 }
 
-function dedupeRepairActions(actions: RepairAction[]): RepairAction[] {
-  const seen = new Set<string>();
-  const deduped: RepairAction[] = [];
+function buildEntailmentDisagreementRepairActions(input: {
+  comparison?: EntailmentJudgeComparisonArtifact;
+  claims: Claim[];
+}): RepairAction[] {
+  if (!input.comparison) {
+    return [];
+  }
+
+  const claimById = new Map(input.claims.map((claim) => [claim.id, claim]));
+
+  return input.comparison.policyDecisions
+    .filter((decision) => decision.gate !== "clear")
+    .map((decision) => {
+      const claim = claimById.get(decision.claimId);
+      const dimension = claim?.dimension ?? decision.dimension;
+      const base = {
+        targetType: "claim" as const,
+        targetId: decision.claimId,
+        severity: decision.severity,
+        status: "unresolved" as const,
+        reason: decision.reason,
+        ...(dimension ? { dimension } : {})
+      };
+
+      if (decision.gate === "conservative_remove") {
+        return {
+          ...base,
+          id: `repair_remove_${decision.claimId}`,
+          type: "remove_claim_from_report" as const,
+          status: "planned" as const,
+          repairSuggestion:
+            "Remove this claim because entailment judges surfaced a severe support risk."
+        };
+      }
+
+      return {
+        ...base,
+        id: `repair_review_${decision.claimId}`,
+        type: "request_human_review" as const,
+        repairSuggestion:
+          "Route this claim to human review before publication or collect stronger evidence."
+      };
+    });
+}
+
+function buildEntailmentRepairPolicyDecisions(input: {
+  comparison: EntailmentJudgeComparisonSummary & { errorMessage?: string };
+  cases: EntailmentJudgeComparisonCase[];
+}): EntailmentRepairPolicyDecision[] {
+  const caseById = new Map(input.cases.map((comparisonCase) => [
+    comparisonCase.caseId,
+    comparisonCase
+  ]));
+
+  return input.comparison.disagreements.flatMap<EntailmentRepairPolicyDecision>((disagreement) => {
+    const comparisonCase = caseById.get(disagreement.caseId);
+
+    if (!comparisonCase) {
+      return [];
+    }
+
+    const labels = disagreement.labels;
+    const hasSevereLabel = Object.values(labels).some(isSevereEntailmentLabel);
+    const hasSupportiveLabel = Object.values(labels).some(isSupportiveEntailmentLabel);
+
+    if (!hasSevereLabel || !hasSupportiveLabel) {
+      return [
+        {
+          caseId: comparisonCase.caseId,
+          claimId: comparisonCase.claimId,
+          gate: "clear" as const,
+          severity: "low" as const,
+          reason: `Entailment judges vary only on non-severe support strength for claim ${comparisonCase.claimId}.`,
+          labels,
+          dimension: comparisonCase.dimension
+        }
+      ];
+    }
+
+    const hasContradiction = Object.values(labels).includes("contradicted");
+
+    return [
+      {
+        caseId: comparisonCase.caseId,
+        claimId: comparisonCase.claimId,
+        gate: hasContradiction ? "conservative_remove" : "human_review",
+        severity: "high" as const,
+        reason: hasContradiction
+          ? `At least one entailment judge found contradiction for claim ${comparisonCase.claimId}.`
+          : `Entailment judges disagree on a severe support label for claim ${comparisonCase.claimId}.`,
+        labels,
+        dimension: comparisonCase.dimension
+      }
+    ];
+  });
+}
+
+function prioritizeRepairActions(actions: RepairAction[]): RepairAction[] {
+  const byKey = new Map<string, RepairAction>();
 
   for (const action of actions) {
-    const key = `${action.type}:${action.targetType}:${action.targetId}`;
-    if (seen.has(key)) {
+    const key = `${action.targetType}:${action.targetId}`;
+    const existing = byKey.get(key);
+
+    if (existing && repairActionPriority(existing) >= repairActionPriority(action)) {
       continue;
     }
 
-    seen.add(key);
-    deduped.push(action);
+    byKey.set(key, action);
   }
 
-  return deduped;
+  return Array.from(byKey.values());
+}
+
+function isSevereEntailmentLabel(label: EntailmentLabel): boolean {
+  return label === "unsupported" || label === "contradicted";
+}
+
+function isSupportiveEntailmentLabel(label: EntailmentLabel): boolean {
+  return label === "entailed" || label === "partial";
+}
+
+function repairActionPriority(action: RepairAction): number {
+  if (action.type === "remove_claim_from_report") {
+    return 3;
+  }
+
+  if (action.type === "request_human_review") {
+    return 2;
+  }
+
+  if (action.type === "keep_with_warning") {
+    return 1;
+  }
+
+  return 0;
 }
 
 function getFinalActionStatus(

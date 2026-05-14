@@ -1000,6 +1000,170 @@ describe("repair agent", () => {
     });
   });
 
+  it("requests human review when entailment judges split on a high-risk claim", async () => {
+    const repair = createRepairPlannerAgent();
+
+    const result = await runAgent(repair, {
+      projectId: "project_1",
+      artifacts: [
+        createFactsArtifact(),
+        createClaimsArtifact([
+          {
+            id: "claim_pricing_split",
+            projectId: "project_1",
+            dimension: "pricing",
+            statement: "Cursor offers paid plans.",
+            factIds: ["fact_1"],
+            confidence: 0.84,
+            kind: "single_competitor"
+          }
+        ]),
+        createReportArtifact([
+          {
+            id: "section_summary",
+            title: "Executive Summary",
+            body: "Cursor offers paid plans.",
+            claimIds: ["claim_pricing_split"]
+          }
+        ]),
+        createReviewFindingsArtifact({
+          qualityScore: 100,
+          findings: []
+        }),
+        createEntailmentJudgeComparisonArtifact({
+          cases: [
+            {
+              caseId: "claim_pricing_split",
+              claimId: "claim_pricing_split",
+              statement: "Cursor offers paid plans.",
+              dimension: "pricing",
+              expectedLabel: "entailed",
+              labels: {
+                deterministic: "entailed",
+                model: "unsupported"
+              }
+            }
+          ],
+          disagreements: [
+            {
+              caseId: "claim_pricing_split",
+              labels: {
+                deterministic: "entailed",
+                model: "unsupported"
+              }
+            }
+          ]
+        })
+      ]
+    });
+
+    expect(result.output.kind).toBe("repair_result");
+    expect(result.output.value).toMatchObject({
+      plannedQualityScore: 100,
+      actions: [
+        {
+          id: "repair_review_claim_pricing_split",
+          type: "request_human_review",
+          targetType: "claim",
+          targetId: "claim_pricing_split",
+          severity: "high",
+          status: "unresolved",
+          dimension: "pricing"
+        }
+      ],
+      unresolvedGaps: ["claim_review:claim_pricing_split"]
+    });
+  });
+
+  it("keeps deterministic removal ahead of human review for already weak claims", async () => {
+    const repair = createRepairPlannerAgent();
+
+    const result = await runAgent(repair, {
+      projectId: "project_1",
+      artifacts: [
+        createSourcesArtifact([
+          {
+            id: "source_1",
+            projectId: "project_1",
+            kind: "url",
+            title: "Cursor pricing",
+            uri: "https://cursor.com/pricing",
+            collectedAt: "2026-05-13T00:00:00.000Z"
+          }
+        ]),
+        createSourceChunksArtifact([
+          {
+            id: "chunk_1",
+            sourceId: "source_1",
+            ordinal: 0,
+            text: "Cursor offers paid plans.",
+            tokenCount: 5
+          }
+        ]),
+        createFactsArtifact(),
+        createClaimsArtifact([
+          {
+            id: "claim_overstated",
+            projectId: "project_1",
+            dimension: "pricing",
+            statement:
+              "Cursor guarantees the cheapest enterprise contract for every buyer.",
+            factIds: ["fact_1"],
+            confidence: 0.9,
+            kind: "comparative"
+          }
+        ]),
+        createReportArtifact([
+          {
+            id: "section_summary",
+            title: "Executive Summary",
+            body:
+              "Cursor guarantees the cheapest enterprise contract for every buyer.",
+            claimIds: ["claim_overstated"]
+          }
+        ]),
+        createReviewFindingsArtifact({
+          qualityScore: 100,
+          findings: []
+        }),
+        createEntailmentJudgeComparisonArtifact({
+          cases: [
+            {
+              caseId: "claim_overstated",
+              claimId: "claim_overstated",
+              statement:
+                "Cursor guarantees the cheapest enterprise contract for every buyer.",
+              dimension: "pricing",
+              expectedLabel: "unsupported",
+              labels: {
+                deterministic: "unsupported",
+                model: "partial"
+              }
+            }
+          ],
+          disagreements: [
+            {
+              caseId: "claim_overstated",
+              labels: {
+                deterministic: "unsupported",
+                model: "partial"
+              }
+            }
+          ]
+        })
+      ]
+    });
+
+    const actions = (result.output.value as { actions: Array<{ type: string }> })
+      .actions;
+
+    expect(actions).toHaveLength(1);
+    expect(actions[0]).toMatchObject({
+      type: "remove_claim_from_report",
+      targetId: "claim_overstated"
+    });
+  });
+
   it("applies repair plans by removing unsafe claim references from the report", async () => {
     const applyRepair = createApplyRepairAgent();
 
@@ -1344,6 +1508,89 @@ describe("repair agent", () => {
         }
       ],
       disagreements: []
+    });
+  });
+
+  it("records model disagreement cases for downstream repair policy", async () => {
+    const model = new MockModelClient([
+      {
+        content: JSON.stringify({
+          label: "unsupported",
+          supportScore: 0.2,
+          matchedTokens: ["cursor"],
+          missingTokens: ["paid", "plans"],
+          contradictions: [],
+          reasons: ["Model requires stronger pricing evidence."]
+        })
+      }
+    ]);
+    const judgeCompare = createEntailmentJudgeComparisonAgent({
+      model,
+      enableModelEntailmentJudge: true
+    });
+
+    const result = await runAgent(judgeCompare, {
+      projectId: "project_1",
+      artifacts: [
+        createSourceChunksArtifact([
+          {
+            id: "chunk_1",
+            sourceId: "source_1",
+            ordinal: 0,
+            text: "Cursor offers paid plans.",
+            tokenCount: 5
+          }
+        ]),
+        createFactsArtifact(),
+        createClaimsArtifact([
+          {
+            id: "claim_supported",
+            projectId: "project_1",
+            dimension: "pricing",
+            statement: "Cursor offers paid plans.",
+            factIds: ["fact_1"],
+            confidence: 0.84,
+            kind: "single_competitor"
+          }
+        ])
+      ]
+    });
+
+    expect(result.output.kind).toBe("entailment_judge_comparison");
+    expect(result.output.value).toMatchObject({
+      status: "succeeded",
+      disagreements: [
+        {
+          caseId: "claim_supported",
+          labels: {
+            deterministic: "entailed",
+            model: "unsupported"
+          }
+        }
+      ],
+      cases: [
+        {
+          caseId: "claim_supported",
+          claimId: "claim_supported",
+          statement: "Cursor offers paid plans.",
+          dimension: "pricing",
+          expectedLabel: "entailed",
+          labels: {
+            deterministic: "entailed",
+            model: "unsupported"
+          }
+        }
+      ],
+      policyDecisions: [
+        {
+          caseId: "claim_supported",
+          claimId: "claim_supported",
+          gate: "human_review",
+          severity: "high",
+          reason:
+            "Entailment judges disagree on a severe support label for claim claim_supported."
+        }
+      ]
     });
   });
 
@@ -1762,6 +2009,93 @@ function createFinalEvalArtifact(value: {
       ...value,
       actions: [],
       unresolvedGaps: []
+    }
+  };
+}
+
+function createEntailmentJudgeComparisonArtifact(value: {
+  cases: Array<{
+    caseId: string;
+    claimId: string;
+    statement: string;
+    dimension: string;
+    expectedLabel: string;
+    labels: Record<string, string>;
+  }>;
+  disagreements: Array<{
+    caseId: string;
+    labels: Record<string, string>;
+  }>;
+}) {
+  return {
+    id: "artifact_entailment_judge_comparison",
+    kind: "entailment_judge_comparison" as const,
+    createdAt: "2026-05-11T00:00:07.000Z",
+    value: {
+      projectId: "project_1",
+      status: "succeeded",
+      totalCases: value.cases.length,
+      judges: [
+        {
+          name: "deterministic",
+          passedCases: value.cases.length,
+          failedCases: 0,
+          accuracy: 1,
+          labelCounts: {
+            entailed: 0,
+            partial: 0,
+            unsupported: 0,
+            contradicted: 0
+          }
+        },
+        {
+          name: "model",
+          passedCases: value.cases.length - value.disagreements.length,
+          failedCases: value.disagreements.length,
+          accuracy:
+            value.cases.length === 0
+              ? 1
+              : (value.cases.length - value.disagreements.length) /
+                value.cases.length,
+          labelCounts: {
+            entailed: 0,
+            partial: 0,
+            unsupported: 0,
+            contradicted: 0
+          }
+        }
+      ],
+      caseLabels: value.cases.map((comparisonCase) => ({
+        caseId: comparisonCase.caseId,
+        labels: comparisonCase.labels
+      })),
+      cases: value.cases,
+      disagreements: value.disagreements,
+      policyDecisions: value.disagreements.map((disagreement) => {
+        const comparisonCase = value.cases.find(
+          (candidate) => candidate.caseId === disagreement.caseId
+        );
+        const labels = Object.values(disagreement.labels);
+        const hasContradiction = labels.includes("contradicted");
+
+        return {
+          caseId: disagreement.caseId,
+          claimId: comparisonCase?.claimId ?? disagreement.caseId,
+          gate: hasContradiction ? "conservative_remove" : "human_review",
+          severity: "high",
+          reason: hasContradiction
+            ? `At least one entailment judge found contradiction for claim ${
+                comparisonCase?.claimId ?? disagreement.caseId
+              }.`
+            : `Entailment judges disagree on a severe support label for claim ${
+                comparisonCase?.claimId ?? disagreement.caseId
+              }.`,
+          labels: disagreement.labels,
+          ...(comparisonCase?.dimension
+            ? { dimension: comparisonCase.dimension }
+            : {})
+        };
+      })
     }
   };
 }

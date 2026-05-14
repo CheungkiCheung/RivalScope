@@ -193,10 +193,21 @@ export function buildMvpWorkflowNodes(inputArtifactIds: string[]): WorkflowNode[
       maxRetries: 1
     },
     {
+      id: "judge_compare",
+      type: "agent",
+      agentName: "judge_compare",
+      dependsOn: ["critique"],
+      status: "pending",
+      inputArtifactIds: [],
+      outputArtifactIds: [],
+      retryCount: 0,
+      maxRetries: 1
+    },
+    {
       id: "repair",
       type: "agent",
       agentName: "repair",
-      dependsOn: ["critique"],
+      dependsOn: ["critique", "judge_compare"],
       status: "pending",
       inputArtifactIds: [],
       outputArtifactIds: [],
@@ -230,17 +241,6 @@ export function buildMvpWorkflowNodes(inputArtifactIds: string[]): WorkflowNode[
       type: "agent",
       agentName: "trust_snapshot",
       dependsOn: ["final_eval"],
-      status: "pending",
-      inputArtifactIds: [],
-      outputArtifactIds: [],
-      retryCount: 0,
-      maxRetries: 1
-    },
-    {
-      id: "judge_compare",
-      type: "agent",
-      agentName: "judge_compare",
-      dependsOn: ["trust_snapshot"],
       status: "pending",
       inputArtifactIds: [],
       outputArtifactIds: [],

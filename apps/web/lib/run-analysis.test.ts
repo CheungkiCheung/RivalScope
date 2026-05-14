@@ -69,9 +69,14 @@ describe("runAnalysis helpers", () => {
         dependsOn: ["write"]
       },
       {
+        id: "judge_compare",
+        agentName: "judge_compare",
+        dependsOn: ["critique"]
+      },
+      {
         id: "repair",
         agentName: "repair",
-        dependsOn: ["critique"]
+        dependsOn: ["critique", "judge_compare"]
       },
       {
         id: "apply_repair",
@@ -88,11 +93,6 @@ describe("runAnalysis helpers", () => {
         agentName: "trust_snapshot",
         dependsOn: ["final_eval"]
       },
-      {
-        id: "judge_compare",
-        agentName: "judge_compare",
-        dependsOn: ["trust_snapshot"]
-      }
     ]);
   });
 });

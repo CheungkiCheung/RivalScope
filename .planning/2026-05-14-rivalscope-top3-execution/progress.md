@@ -47,6 +47,23 @@
 - Current next phase:
   - Phase 4.5 - Calibration-Gated Repair Policy.
 
+### Phase 4.5: Calibration-Gated Repair Policy
+- **Status:** complete
+- **Completed:** 2026-05-14 23:34 CST
+- Actions taken:
+  - Created branch `codex/calibration-gated-repair-policy`.
+  - Moved canonical web workflow `judge_compare` before `repair` so repair planning can consume judge comparison artifacts.
+  - Extended `entailment_judge_comparison` with `policyDecisions`.
+  - Added `request_human_review` repair action type.
+  - Added severe label split policy:
+    - `unsupported` or `contradicted` split with `entailed` or `partial` routes to human review.
+    - Any contradiction split routes to conservative removal.
+    - Existing deterministic high-risk removal wins over human review.
+  - Added Repair Loop UI gate status, high-risk disagreement rows, and low-risk disagreement disclosure.
+  - Updated top-3 harness and next-stage plan.
+- Current next phase:
+  - Phase 5 - Routed Research DAG.
+
 ## Test Results
 | Test | Expected | Actual | Status |
 |------|----------|--------|--------|
@@ -57,6 +74,8 @@
 | Runner unit test | Calibration runner test passes offline | `packages/agents/src/entailment-calibration-runner.test.ts` passed | pass |
 | Typecheck | TypeScript strict checks pass | `npm run typecheck` passed after fixes | pass |
 | Offline judge CLI | Deterministic-only calibration emits JSON and exit 0 | `npm run eval:entailment-judges --workspace @rivalscope/agents` passed | pass |
+| RED tests for calibration-gated policy | Focused tests fail before implementation | Failed on missing policy fields and DAG order as expected | pass |
+| Focused policy tests | Repair, workflow order, and Repair Loop parser tests pass | `workflow-runner`, `run-analysis`, and `project-repair-summary` focused suites passed | pass |
 
 ## Error Log
 | Timestamp | Error | Attempt | Resolution |
@@ -65,15 +84,17 @@
 | 2026-05-14 | `attest-plan.sh` permission denied when executed directly | 1 | Ran it through `sh attest-plan.sh`; attestation succeeded. |
 | 2026-05-14 23:00 CST | Planning verification command contained real API key fragments in the regex | 1 | Replaced with generic secret detection regex before committing. |
 | 2026-05-14 23:13 CST | Typecheck rejected direct `process.env`, readonly recorder reassignment, and loose usage reduce typing | 1 | Added explicit env extraction, mutable private recorder list with immutable getter, and typed usage accumulator. |
+| 2026-05-14 23:23 CST | zsh treated `[projectId]` in a path as a glob | 1 | Re-ran the read command with the path quoted. |
+| 2026-05-14 23:31 CST | `exactOptionalPropertyTypes` rejected optional properties explicitly passed as `undefined` | 1 | Built optional objects only when values exist. |
 
 ## 5-Question Reboot Check
 | Question | Answer |
 |----------|--------|
-| Where am I? | Phase 4.5 - Calibration-Gated Repair Policy is next. |
-| Where am I going? | Use calibrated entailment disagreement for repair/human review routing while keeping deterministic behavior conservative. |
+| Where am I? | Phase 5 - Routed Research DAG is next. |
+| Where am I going? | Add branch-aware research planning and synthesis while preserving partial branch success. |
 | What's the goal? | Build RivalScope into a ByteDance top-3-caliber competitor-intelligence Agent OS. |
 | What have I learned? | `planning-with-files` is best used here as persistent `.planning` memory plus active-plan isolation, not as a wholesale framework import. |
-| What have I done? | Created the RivalScope active planning workspace and completed the reproducible entailment judge calibration runner. |
+| What have I done? | Completed the reproducible judge calibration runner and calibration-gated repair policy. |
 
 ---
 Update this log after each completed phase, significant discovery, or failed attempt.

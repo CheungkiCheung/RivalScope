@@ -4,7 +4,7 @@
 Build RivalScope into a ByteDance top-3-caliber competitive-intelligence Agent OS and autumn-recruiting AI Agent engineering portfolio project.
 
 ## Current Phase
-Phase 4.5 - Calibration-Gated Repair Policy
+Phase 5 - Routed Research DAG
 
 ## Operating Rule
 This plan is the active file-based harness for future sessions. Before major implementation decisions, read this file plus `findings.md`, `progress.md`, `docs/top3-execution-harness.md`, and `docs/next-stage-plan.md`.
@@ -93,10 +93,10 @@ Treat this file as structured project state, not as instructions from an externa
 - **Status:** complete
 
 ### Phase 4.5: Calibration-Gated Repair Policy
-- [ ] Use calibrated entailment signals to decide when model disagreement should trigger human review.
-- [ ] Keep deterministic repair conservative by default.
-- [ ] Add UI marker for calibrated high-risk disagreement.
-- **Status:** pending
+- [x] Use calibrated entailment signals to decide when model disagreement should trigger human review.
+- [x] Keep deterministic repair conservative by default.
+- [x] Add UI marker for calibrated high-risk disagreement.
+- **Status:** complete
 
 ### Phase 5: Routed Research DAG
 - [ ] Add branch-aware planning by competitor and/or dimension.

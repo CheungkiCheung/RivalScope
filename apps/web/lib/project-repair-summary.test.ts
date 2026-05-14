@@ -230,6 +230,10 @@ describe("buildProjectRepairSummary", () => {
     expect(summary.judgeComparison).toEqual({
       totalCases: 2,
       disagreementsCount: 1,
+      gateStatus: "review",
+      highRiskDisagreementsCount: 0,
+      highRiskDisagreements: [],
+      lowRiskDisagreementsCount: 1,
       judges: [
         {
           name: "deterministic",
@@ -251,6 +255,110 @@ describe("buildProjectRepairSummary", () => {
             deterministic: "unsupported",
             model: "partial"
           }
+        }
+      ]
+    });
+  });
+
+  it("surfaces calibrated high-risk disagreement gate decisions", () => {
+    const summary = buildProjectRepairSummary({
+      artifacts: [
+        {
+          id: "artifact_final_eval",
+          kind: "final_eval",
+          createdAt: new Date("2026-05-14T00:00:00.000Z"),
+          value: {
+            status: "unchanged",
+            draftQualityScore: 100,
+            repairedQualityScore: 100,
+            delta: 0,
+            actions: [],
+            unresolvedGaps: ["claim_review:claim_2"]
+          }
+        },
+        {
+          id: "artifact_judge_comparison",
+          kind: "entailment_judge_comparison",
+          createdAt: new Date("2026-05-14T00:01:00.000Z"),
+          value: {
+            status: "succeeded",
+            totalCases: 1,
+            judges: [
+              {
+                name: "deterministic",
+                passedCases: 1,
+                failedCases: 0,
+                accuracy: 1,
+                labelCounts: {
+                  entailed: 1,
+                  partial: 0,
+                  unsupported: 0,
+                  contradicted: 0
+                }
+              },
+              {
+                name: "model",
+                passedCases: 0,
+                failedCases: 1,
+                accuracy: 0,
+                labelCounts: {
+                  entailed: 0,
+                  partial: 0,
+                  unsupported: 1,
+                  contradicted: 0
+                }
+              }
+            ],
+            cases: [
+              {
+                caseId: "claim_2",
+                claimId: "claim_2",
+                statement: "Cursor offers paid plans.",
+                dimension: "pricing",
+                expectedLabel: "entailed",
+                labels: {
+                  deterministic: "entailed",
+                  model: "unsupported"
+                }
+              }
+            ],
+            disagreements: [
+              {
+                caseId: "claim_2",
+                labels: {
+                  deterministic: "entailed",
+                  model: "unsupported"
+                }
+              }
+            ],
+            policyDecisions: [
+              {
+                caseId: "claim_2",
+                claimId: "claim_2",
+                gate: "human_review",
+                severity: "high",
+                reason:
+                  "Entailment judges disagree on a severe support label for claim claim_2."
+              }
+            ]
+          }
+        }
+      ]
+    });
+
+    expect(summary.judgeComparison).toMatchObject({
+      gateStatus: "review",
+      highRiskDisagreementsCount: 1,
+      lowRiskDisagreementsCount: 0,
+      highRiskDisagreements: [
+        {
+          caseId: "claim_2",
+          claimId: "claim_2",
+          statement: "Cursor offers paid plans.",
+          dimension: "pricing",
+          expectedLabel: "entailed",
+          gate: "human_review",
+          severity: "high"
         }
       ]
     });

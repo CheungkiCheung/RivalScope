@@ -654,6 +654,30 @@ Purpose:
 
 Current limitation: the command measures judge quality but does not yet use calibrated disagreement to change repair policy. The next phase should convert high-risk model/deterministic disagreement into explicit human-review or repair-routing gates.
 
+## Current Phase 4.5: Calibration-Gated Repair Policy
+
+Status: implemented for claim-level repair routing.
+
+Purpose:
+
+- Move `judge_compare` before `repair` in the canonical web workflow so repair planning can consume entailment judge signals.
+- Extend `entailment_judge_comparison` artifacts with `policyDecisions`.
+- Route severe label splits, such as `entailed` vs `unsupported`, to `request_human_review` instead of silently trusting one judge.
+- Route contradiction splits to conservative removal.
+- Keep deterministic semantic-trust removal higher priority than model disagreement review for already weak claims.
+- Surface the Repair Gate in the project Repair Loop with high-risk rows inline and low-risk disagreements folded away.
+
+Policy rule:
+
+```text
+unsupported/contradicted split with entailed/partial -> human review
+contradicted from any judge -> conservative removal
+deterministic high-risk trust removal -> removal wins over review
+entailed vs partial only -> low-risk review display, no repair action
+```
+
+Current limitation: there is not yet a separate human-review node or approval queue. Human review is represented as an unresolved `repair_result` action and UI gate, which is enough for the current MVP but should become an explicit workflow checkpoint before final submission.
+
 ## Per-Module Work Rule
 
 Every metric or module should ship with:

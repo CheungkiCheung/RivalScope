@@ -331,6 +331,22 @@ textarea {
   color: var(--danger);
 }
 
+.disclosure {
+  border-top: 1px solid var(--border);
+  padding-top: 10px;
+}
+
+.disclosure summary {
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.disclosure .compact-list {
+  margin-top: 10px;
+}
+
 .report {
   display: grid;
   gap: 18px;

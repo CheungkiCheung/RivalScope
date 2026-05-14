@@ -46,11 +46,13 @@
 - Entailment judge comparison artifact/UI.
 - Offline entailment calibration suite.
 - Reproducible entailment judge calibration runner with failed-case, disagreement, latency, call-count, and token-usage reporting.
+- Calibration-gated repair policy that routes severe judge disagreement to human review or conservative removal.
 
 ## Open Risks
 - Golden entailment suite is still small and deterministic-first.
 - Mimo judge calibration now has a committed runner, but real-provider calibration results have not been captured in a tracked artifact.
 - Routed research DAG is still pending.
+- Human review is represented as an unresolved repair action and UI gate, not yet as a first-class workflow checkpoint.
 - Export/evidence appendix and deployment hardening are still pending.
 - UI shows many panels but does not yet converge into a single polished “Intelligence Trace” story.
 

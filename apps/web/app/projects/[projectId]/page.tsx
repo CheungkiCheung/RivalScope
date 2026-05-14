@@ -376,6 +376,10 @@ export default async function ProjectPage({ params }: ProjectPageProps) {
                           {repairSummary.judgeComparison.disagreementsCount}
                         </strong>
                       </div>
+                      <div className="trace-summary">
+                        <span className="metric-label">Repair Gate</span>
+                        <strong>{repairSummary.judgeComparison.gateStatus}</strong>
+                      </div>
                     </>
                   ) : null}
                 </div>
@@ -386,16 +390,25 @@ export default async function ProjectPage({ params }: ProjectPageProps) {
                         <strong>Judge Comparison</strong>
                         <span
                           className={`status ${
-                            repairSummary.judgeComparison.disagreementsCount === 0
+                            repairSummary.judgeComparison.highRiskDisagreementsCount > 0
+                              ? "bad"
+                              : repairSummary.judgeComparison.gateStatus === "clear"
                               ? "ok"
                               : "warn"
                           }`}
                         >
-                          {repairSummary.judgeComparison.disagreementsCount === 0
-                            ? "aligned"
-                            : "review"}
+                          {repairSummary.judgeComparison.highRiskDisagreementsCount > 0
+                            ? "gated"
+                            : repairSummary.judgeComparison.gateStatus === "clear"
+                              ? "aligned"
+                              : repairSummary.judgeComparison.gateStatus}
                         </span>
                       </div>
+                      {repairSummary.judgeComparison.errorMessage ? (
+                        <p className="muted">
+                          Model judge unavailable; deterministic baseline shown.
+                        </p>
+                      ) : null}
                       <div className="pill-row">
                         {repairSummary.judgeComparison.judges.map((judge) => (
                           <span className="pill" key={judge.name}>
@@ -404,19 +417,37 @@ export default async function ProjectPage({ params }: ProjectPageProps) {
                           </span>
                         ))}
                       </div>
-                      {repairSummary.judgeComparison.disagreements.length > 0 ? (
+                      {repairSummary.judgeComparison.highRiskDisagreements.length > 0 ? (
                         <div className="list compact-list">
-                          {repairSummary.judgeComparison.disagreements.map(
+                          <p className="muted">
+                            {
+                              repairSummary.judgeComparison
+                                .highRiskDisagreementsCount
+                            }{" "}
+                            high-risk claim needs review before repair routing.
+                          </p>
+                          {repairSummary.judgeComparison.highRiskDisagreements.map(
                             (disagreement) => (
                               <div
                                 className="item compact-item"
                                 key={disagreement.caseId}
                               >
                                 <div className="item-head">
-                                  <strong>{disagreement.caseId}</strong>
-                                  <span className="status warn">disagree</span>
+                                  <strong>
+                                    {disagreement.dimension} ·{" "}
+                                    {disagreement.claimId}
+                                  </strong>
+                                  <span className="status bad">
+                                    {disagreement.gate === "conservative_remove"
+                                      ? "remove"
+                                      : "review"}
+                                  </span>
                                 </div>
+                                <p className="muted">{disagreement.statement}</p>
                                 <div className="pill-row">
+                                  <span className="pill">
+                                    expected: {disagreement.expectedLabel}
+                                  </span>
                                   {Object.entries(disagreement.labels).map(
                                     ([judgeName, label]) => (
                                       <span
@@ -428,10 +459,47 @@ export default async function ProjectPage({ params }: ProjectPageProps) {
                                     )
                                   )}
                                 </div>
+                                <p className="muted">{disagreement.reason}</p>
                               </div>
                             )
                           )}
                         </div>
+                      ) : repairSummary.judgeComparison.disagreements.length > 0 ? (
+                        <details className="disclosure">
+                          <summary>
+                            Show{" "}
+                            {repairSummary.judgeComparison
+                              .lowRiskDisagreementsCount}{" "}
+                            low-risk disagreements
+                          </summary>
+                          <div className="list compact-list">
+                            {repairSummary.judgeComparison.disagreements.map(
+                              (disagreement) => (
+                                <div
+                                  className="item compact-item"
+                                  key={disagreement.caseId}
+                                >
+                                  <div className="item-head">
+                                    <strong>{disagreement.caseId}</strong>
+                                    <span className="status warn">disagree</span>
+                                  </div>
+                                  <div className="pill-row">
+                                    {Object.entries(disagreement.labels).map(
+                                      ([judgeName, label]) => (
+                                        <span
+                                          className="pill"
+                                          key={`${disagreement.caseId}-${judgeName}`}
+                                        >
+                                          {judgeName}: {label}
+                                        </span>
+                                      )
+                                    )}
+                                  </div>
+                                </div>
+                              )
+                            )}
+                          </div>
+                        </details>
                       ) : (
                         <p className="muted">
                           {repairSummary.judgeComparison.judges.length > 1
