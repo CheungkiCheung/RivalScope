@@ -575,7 +575,18 @@ Purpose:
 - Keep the demo explicit through `[demo:repair_lift]` in project description instead of depending on a model to accidentally produce a weak claim.
 - Preserve default conservative behavior for non-demo projects.
 
-Current limitation: the seeded demo proves the repair lift offline. Later work should add an LLM/NLI-backed entailment judge behind golden fixtures and compare deterministic lexical support against semantic adjudication.
+## Current Phase 4: Entailment Eval Harness
+
+Status: implemented for deterministic offline evaluation.
+
+Purpose:
+
+- Promote semantic support from an internal score into a standalone eval harness.
+- Label claim/evidence relationships as `entailed`, `partial`, `unsupported`, or `contradicted`.
+- Track benchmark accuracy and label counts so future LLM/NLI judges can be compared against deterministic lexical support.
+- Feed entailment reasons back into Claim Trust explanations.
+
+Current limitation: the evaluator is still deterministic and lexical. The next step is to add an optional LLM/NLI-backed judge behind the same interface and compare both judges on golden entailment fixtures.
 
 ## Per-Module Work Rule
 

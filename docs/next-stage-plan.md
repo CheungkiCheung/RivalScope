@@ -40,7 +40,7 @@ The immediate next milestone after Phase 3 is:
 Semantic Evidence Sufficiency + Source-Quality-Aware Repair
 ```
 
-Current status: implemented for deterministic trust scoring, repair planning, persisted before/after trust snapshots, and a seeded repair-lift demo path. Claim Trust now includes lexical `semanticSupport` and source `sourceAuthority` metrics; Repair Planner can use weak semantic-support penalties to remove unsupported-but-cited claims; `claim_trust_snapshot` artifacts preserve draft/final trust deltas; `[demo:repair_lift]` projects prove the lift repeatably.
+Current status: implemented for deterministic trust scoring, repair planning, persisted before/after trust snapshots, a seeded repair-lift demo path, and a standalone entailment eval harness. Claim Trust now includes lexical `semanticSupport` and source `sourceAuthority` metrics; Repair Planner can use weak semantic-support penalties to remove unsupported-but-cited claims; `claim_trust_snapshot` artifacts preserve draft/final trust deltas; `[demo:repair_lift]` projects prove the lift repeatably; entailment benchmarks expose label accuracy for future LLM/NLI judges.
 
 ## Research Summary
 
@@ -230,7 +230,8 @@ Current implementation notes:
 - The next quality jump has landed: deterministic semantic evidence sufficiency and source authority scoring are now part of Claim Trust and repair planning.
 - Done: persist before/after Claim Trust snapshots as generic artifacts and show trust delta in Repair Loop.
 - Done: add a seeded repair-lift fixture where a weak draft claim is removed and the final trust delta is positive in a repeatable end-to-end run.
-- Remaining work after this milestone: add an LLM/NLI-backed entailment evaluator behind golden fixtures and use it to benchmark deterministic lexical support.
+- Done: add a standalone deterministic entailment harness with `entailed`, `partial`, `unsupported`, and `contradicted` labels plus benchmark accuracy.
+- Remaining work after this milestone: add an optional LLM/NLI-backed entailment evaluator behind the same interface and compare it against deterministic lexical support on golden fixtures.
 
 ## Stage 1: Real Source Tooling
 

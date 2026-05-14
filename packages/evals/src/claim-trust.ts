@@ -1,4 +1,5 @@
 import type { Claim, Fact, Source, SourceChunk } from "@rivalscope/core";
+import { evaluateClaimEntailment } from "./entailment";
 
 export type ClaimTrustRiskLevel = "low" | "medium" | "high";
 
@@ -79,11 +80,12 @@ export function evaluateClaimTrust(input: EvaluateClaimTrustInput): ClaimTrustRe
   const validSources = sourceIds
     .map((sourceId) => sourceById.get(sourceId))
     .filter((source): source is Source => source !== undefined);
-  const semanticSupport = calculateSemanticSupport({
+  const entailment = evaluateClaimEntailment({
     claim: input.claim,
     facts: validFacts,
     chunks: validChunks
   });
+  const semanticSupport = entailment.supportScore;
   const sourceAuthority = calculateSourceAuthority(validSources);
   const penalties = buildPenalties({
     claim: input.claim,
@@ -132,7 +134,7 @@ export function evaluateClaimTrust(input: EvaluateClaimTrustInput): ClaimTrustRe
     riskLevel: toRiskLevel(score),
     metrics,
     penalties,
-    reasons: buildReasons(metrics, penalties),
+    reasons: buildReasons(metrics, penalties, entailment.reasons),
     factIds: validFactIds,
     sourceChunkIds: validChunks.map((chunk) => chunk.id),
     sourceIds: validSources.map((source) => source.id)
@@ -258,14 +260,16 @@ function buildPenalties(input: {
 
 function buildReasons(
   metrics: ClaimTrustMetrics,
-  penalties: ClaimTrustPenalty[]
+  penalties: ClaimTrustPenalty[],
+  entailmentReasons: string[]
 ): string[] {
   const reasons = [
     `${metrics.validFactCount}/${metrics.citedFactCount} cited facts are valid.`,
     `${metrics.sourceChunkCount} source chunks trace to ${metrics.sourceCount} sources.`,
     `Average fact confidence is ${Math.round(metrics.factConfidence * 100)}%.`,
     `Semantic support is ${Math.round(metrics.semanticSupport * 100)}%.`,
-    `Source authority is ${Math.round(metrics.sourceAuthority * 100)}%.`
+    `Source authority is ${Math.round(metrics.sourceAuthority * 100)}%.`,
+    ...entailmentReasons
   ];
 
   if (penalties.length === 0) {
@@ -311,28 +315,6 @@ function clamp01(value: number): number {
   return Math.max(0, Math.min(1, value));
 }
 
-function calculateSemanticSupport(input: {
-  claim: Claim;
-  facts: Fact[];
-  chunks: SourceChunk[];
-}): number {
-  const claimTokens = tokenize(input.claim.statement);
-
-  if (claimTokens.length === 0) {
-    return 1;
-  }
-
-  const evidenceTokens = new Set(
-    [
-      ...input.facts.flatMap((fact) => tokenize(fact.statement)),
-      ...input.chunks.flatMap((chunk) => tokenize(chunk.text))
-    ]
-  );
-  const matchedTokens = claimTokens.filter((token) => evidenceTokens.has(token));
-
-  return matchedTokens.length / claimTokens.length;
-}
-
 function calculateSourceAuthority(sources: Source[]): number {
   if (sources.length === 0) {
     return 0;
@@ -364,35 +346,6 @@ function scoreSourceAuthority(source: Source): number {
   return clamp01(score);
 }
 
-function tokenize(value: string): string[] {
-  return unique(
-    value
-      .toLowerCase()
-      .replace(/[^a-z0-9_]+/g, " ")
-      .split(/\s+/)
-      .map((token) => token.trim())
-      .filter((token) => token.length >= 3)
-      .filter((token) => !STOP_WORDS.has(token))
-  );
-}
-
 function includesAny(value: string, needles: string[]): boolean {
   return needles.some((needle) => value.includes(needle));
 }
-
-const STOP_WORDS = new Set([
-  "the",
-  "and",
-  "for",
-  "with",
-  "from",
-  "that",
-  "this",
-  "its",
-  "into",
-  "every",
-  "buyer",
-  "buyers",
-  "claim",
-  "signal"
-]);

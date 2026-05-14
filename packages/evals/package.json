@@ -6,7 +6,7 @@
   "main": "./src/index.ts",
   "types": "./src/index.ts",
   "scripts": {
-    "eval:golden": "tsx src/cli.ts",
+    "eval:golden": "node --import tsx src/cli.ts",
     "test": "vitest run",
     "typecheck": "tsc --noEmit"
   },

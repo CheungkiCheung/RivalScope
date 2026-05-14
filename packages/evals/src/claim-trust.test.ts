@@ -217,6 +217,7 @@ describe("evaluateClaimTrust", () => {
       message:
         "Claim claim_semantic_gap has weak lexical support from cited evidence."
     });
+    expect(result.reasons).toContain("Entailment label is unsupported.");
   });
 
   it("penalizes claims supported only by low-authority sources", () => {
