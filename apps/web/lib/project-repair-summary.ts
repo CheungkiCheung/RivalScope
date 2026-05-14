@@ -27,6 +27,27 @@ export interface ProjectRepairSummary {
   delta: number | null;
   actions: ProjectRepairActionSummary[];
   unresolvedGaps: string[];
+  claimTrust?: ProjectRepairClaimTrustSummary;
+}
+
+export interface ProjectRepairClaimTrustSummary {
+  draftAverageTrust: number | null;
+  finalAverageTrust: number | null;
+  delta: number | null;
+  claims: ProjectRepairClaimTrustRow[];
+}
+
+export interface ProjectRepairClaimTrustRow {
+  claimId: string;
+  dimension: string;
+  statement: string;
+  draftScore: number;
+  finalScore: number | null;
+  delta: number | null;
+  status: "kept" | "removed";
+  draftRiskLevel: string;
+  finalRiskLevel: string | null;
+  penalties: string[];
 }
 
 export function buildProjectRepairSummary(
@@ -37,6 +58,11 @@ export function buildProjectRepairSummary(
     .sort((left, right) => right.createdAt.getTime() - left.createdAt.getTime())
     .map((artifact) => parseFinalEval(artifact.value))
     .find((value): value is ParsedFinalEval => value !== null);
+  const claimTrust = [...input.artifacts]
+    .filter((artifact) => artifact.kind === "claim_trust_snapshot")
+    .sort((left, right) => right.createdAt.getTime() - left.createdAt.getTime())
+    .map((artifact) => parseClaimTrustSnapshot(artifact.value))
+    .find((value): value is ProjectRepairClaimTrustSummary => value !== null);
 
   if (!finalEval) {
     return {
@@ -45,11 +71,15 @@ export function buildProjectRepairSummary(
       repairedQualityScore: null,
       delta: null,
       actions: [],
-      unresolvedGaps: []
+      unresolvedGaps: [],
+      ...(claimTrust ? { claimTrust } : {})
     };
   }
 
-  return finalEval;
+  return {
+    ...finalEval,
+    ...(claimTrust ? { claimTrust } : {})
+  };
 }
 
 interface ParsedFinalEval {
@@ -125,6 +155,66 @@ function parseRepairAction(value: unknown): ProjectRepairActionSummary | null {
   };
 }
 
+function parseClaimTrustSnapshot(
+  value: unknown
+): ProjectRepairClaimTrustSummary | null {
+  if (!isRecord(value)) {
+    return null;
+  }
+
+  if (
+    !isNullableNumber(value.draftAverageTrust) ||
+    !isNullableNumber(value.finalAverageTrust) ||
+    !isNullableNumber(value.trustDelta) ||
+    !Array.isArray(value.claims)
+  ) {
+    return null;
+  }
+
+  return {
+    draftAverageTrust: value.draftAverageTrust,
+    finalAverageTrust: value.finalAverageTrust,
+    delta: value.trustDelta,
+    claims: value.claims.map(parseClaimTrustRow).filter(isClaimTrustRow)
+  };
+}
+
+function parseClaimTrustRow(value: unknown): ProjectRepairClaimTrustRow | null {
+  if (!isRecord(value)) {
+    return null;
+  }
+
+  if (
+    typeof value.claimId !== "string" ||
+    typeof value.dimension !== "string" ||
+    typeof value.statement !== "string" ||
+    typeof value.draftScore !== "number" ||
+    !isNullableNumber(value.finalScore) ||
+    !isNullableNumber(value.delta) ||
+    (value.status !== "kept" && value.status !== "removed") ||
+    typeof value.draftRiskLevel !== "string" ||
+    !isNullableString(value.finalRiskLevel) ||
+    !Array.isArray(value.penalties)
+  ) {
+    return null;
+  }
+
+  return {
+    claimId: value.claimId,
+    dimension: value.dimension,
+    statement: value.statement,
+    draftScore: value.draftScore,
+    finalScore: value.finalScore,
+    delta: value.delta,
+    status: value.status,
+    draftRiskLevel: value.draftRiskLevel,
+    finalRiskLevel: value.finalRiskLevel,
+    penalties: value.penalties.filter(
+      (penalty): penalty is string => typeof penalty === "string"
+    )
+  };
+}
+
 function isRepairAction(
   action: ProjectRepairActionSummary | null
 ): action is ProjectRepairActionSummary {
@@ -133,4 +223,18 @@ function isRepairAction(
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
+}
+
+function isNullableNumber(value: unknown): value is number | null {
+  return typeof value === "number" || value === null;
+}
+
+function isNullableString(value: unknown): value is string | null {
+  return typeof value === "string" || value === null;
+}
+
+function isClaimTrustRow(
+  row: ProjectRepairClaimTrustRow | null
+): row is ProjectRepairClaimTrustRow {
+  return row !== null;
 }

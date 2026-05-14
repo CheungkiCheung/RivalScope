@@ -538,7 +538,7 @@ Do not spend major implementation time on P2 before P0/P1 trust and repair metri
 
 ## Current Phase 3.5: Semantic Evidence And Source-Quality Repair
 
-Status: in progress on top of the deterministic repair loop.
+Status: implemented on top of the deterministic repair loop.
 
 Purpose:
 
@@ -552,6 +552,19 @@ Current deterministic formula additions:
 - `sourceAuthority`: explicit score based on source kind, HTTPS, official/docs/pricing/company URI signals, and local/manual-source penalties.
 
 Current limitation: this is not full semantic entailment. It is an offline, explainable first gate for obvious hallucinated or over-strong claims. Later work should add LLM/NLI-style entailment checks behind eval fixtures and persist before/after Claim Trust snapshots.
+
+## Current Phase 3.6: Claim Trust Snapshots
+
+Status: implemented for generic artifact persistence and project-page repair summary.
+
+Purpose:
+
+- Persist before/after Claim Trust deltas as `claim_trust_snapshot` artifacts.
+- Show draft average trust, final average trust, and trust delta in the Repair Loop.
+- Record claim-level status: kept or removed.
+- Preserve removed weak claims as audit evidence instead of only hiding them from the final report.
+
+Current limitation: the system can now persist trust deltas, but still needs a seeded demo fixture that intentionally creates a weak draft claim and proves the repair lift in a repeatable end-to-end run.
 
 ## Per-Module Work Rule
 

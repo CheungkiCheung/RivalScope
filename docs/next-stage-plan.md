@@ -40,7 +40,7 @@ The immediate next milestone after Phase 3 is:
 Semantic Evidence Sufficiency + Source-Quality-Aware Repair
 ```
 
-Current status: in progress. Claim Trust now includes deterministic lexical `semanticSupport` and source `sourceAuthority` metrics, and Repair Planner can use weak semantic-support penalties to remove unsupported-but-cited claims.
+Current status: implemented for deterministic trust scoring, repair planning, and persisted before/after trust snapshots. Claim Trust now includes lexical `semanticSupport` and source `sourceAuthority` metrics; Repair Planner can use weak semantic-support penalties to remove unsupported-but-cited claims; `claim_trust_snapshot` artifacts preserve draft/final trust deltas.
 
 ## Research Summary
 
@@ -228,7 +228,8 @@ Current implementation notes:
 - The workflow now runs `extract -> analyze -> write -> critique -> repair -> apply_repair -> final_eval`.
 - The project page shows `Repair Delta` plus a `Repair Loop` action history from persisted artifacts.
 - The next quality jump is underway: deterministic semantic evidence sufficiency and source authority scoring are now part of Claim Trust and repair planning.
-- Remaining work after this milestone: persist before/after Claim Trust snapshots and add a seeded demo fixture where a weak draft visibly improves after repair.
+- Done: persist before/after Claim Trust snapshots as generic artifacts and show trust delta in Repair Loop.
+- Remaining work after this milestone: add a seeded demo fixture where a weak draft visibly improves after repair in a repeatable end-to-end run.
 
 ## Stage 1: Real Source Tooling
 

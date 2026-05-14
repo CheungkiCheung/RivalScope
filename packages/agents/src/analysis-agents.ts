@@ -1,6 +1,9 @@
 import type { Claim, Fact, Source, SourceChunk } from "@rivalscope/core";
 import { z } from "zod";
-import { evaluateClaimTrust } from "@rivalscope/evals";
+import {
+  evaluateClaimTrust,
+  type ClaimTrustRiskLevel
+} from "@rivalscope/evals";
 import {
   getLatestArtifactValue,
   getOptionalLatestArtifactValue
@@ -83,6 +86,38 @@ export interface RepairResult {
   unresolvedGaps: string[];
 }
 
+export interface FinalEvaluationResult {
+  projectId: string;
+  status: "improved" | "unchanged";
+  draftQualityScore: number;
+  repairedQualityScore: number;
+  delta: number;
+  actions: RepairAction[];
+  unresolvedGaps: string[];
+}
+
+export interface ClaimTrustSnapshotClaim {
+  claimId: string;
+  dimension: string;
+  statement: string;
+  draftScore: number;
+  finalScore: number | null;
+  delta: number | null;
+  status: "kept" | "removed";
+  draftRiskLevel: ClaimTrustRiskLevel;
+  finalRiskLevel: ClaimTrustRiskLevel | null;
+  penalties: string[];
+}
+
+export interface ClaimTrustSnapshot {
+  projectId: string;
+  repairEvaluation: FinalEvaluationResult;
+  draftAverageTrust: number | null;
+  finalAverageTrust: number | null;
+  trustDelta: number | null;
+  claims: ClaimTrustSnapshotClaim[];
+}
+
 export interface WriterAgentOptions {
   buildSections?(claims: Claim[]): ReportSectionDraft[];
 }
@@ -97,7 +132,8 @@ export function createAnalysisWorkflowAgents(
     critique: createCriticAgent(),
     repair: createRepairPlannerAgent(),
     apply_repair: createApplyRepairAgent(),
-    final_eval: createFinalEvaluatorAgent()
+    final_eval: createFinalEvaluatorAgent(),
+    trust_snapshot: createClaimTrustSnapshotAgent()
   };
 }
 
@@ -723,9 +759,125 @@ export function createFinalEvaluatorAgent(): WorkflowAgent {
           delta,
           actions,
           unresolvedGaps: repair.unresolvedGaps
-        }
+        } satisfies FinalEvaluationResult
       };
     }
+  };
+}
+
+export function createClaimTrustSnapshotAgent(): WorkflowAgent {
+  return {
+    name: "trust_snapshot",
+    role: "Compares draft and repaired claim trust.",
+    inputSchema: workflowAgentInputSchema,
+    outputSchema: workflowAgentOutputSchema,
+    run: async (input) => {
+      const claims = getLatestArtifactValue<{ claims: Claim[] }>(
+        input.artifacts,
+        "claims"
+      ).claims;
+      const facts = getLatestArtifactValue<{ facts: Fact[] }>(
+        input.artifacts,
+        "facts"
+      ).facts;
+      const chunks = getLatestArtifactValue<{ chunks: SourceChunk[] }>(
+        input.artifacts,
+        "source_chunks"
+      ).chunks;
+      const sources = getOptionalLatestArtifactValue<{ sources: Source[] }>(
+        input.artifacts,
+        "sources"
+      )?.sources ?? [];
+      const finalEval = getLatestArtifactValue<FinalEvaluationResult>(
+        input.artifacts,
+        "final_eval"
+      );
+      const report = getLatestArtifactValue<{
+        repair?: {
+          removedClaimIds?: string[];
+        };
+      }>(input.artifacts, "report");
+      const appliedRemovalIds = new Set([
+        ...(report.repair?.removedClaimIds ?? []),
+        ...finalEval.actions
+          .filter(
+            (action) =>
+              action.status === "applied" &&
+              action.type === "remove_claim_from_report"
+          )
+          .map((action) => action.targetId)
+      ]);
+      const snapshotClaims = claims.map((claim) =>
+        buildClaimTrustSnapshotClaim({
+          claim,
+          facts,
+          chunks,
+          sources,
+          removedClaimIds: appliedRemovalIds
+        })
+      );
+      const draftAverageTrust = averageNullable(
+        snapshotClaims.map((claim) => claim.draftScore)
+      );
+      const finalAverageTrust = averageNullable(
+        snapshotClaims
+          .map((claim) => claim.finalScore)
+          .filter((score): score is number => score !== null)
+      );
+
+      return {
+        kind: "claim_trust_snapshot",
+        value: {
+          projectId: input.projectId,
+          repairEvaluation: finalEval,
+          draftAverageTrust,
+          finalAverageTrust,
+          trustDelta:
+            draftAverageTrust === null || finalAverageTrust === null
+              ? null
+              : finalAverageTrust - draftAverageTrust,
+          claims: snapshotClaims
+        } satisfies ClaimTrustSnapshot
+      };
+    }
+  };
+}
+
+function buildClaimTrustSnapshotClaim(input: {
+  claim: Claim;
+  facts: Fact[];
+  chunks: SourceChunk[];
+  sources: Source[];
+  removedClaimIds: Set<string>;
+}): ClaimTrustSnapshotClaim {
+  const draftTrust = evaluateClaimTrust({
+    claim: input.claim,
+    facts: input.facts,
+    chunks: input.chunks,
+    sources: input.sources
+  });
+  const status = input.removedClaimIds.has(input.claim.id) ? "removed" : "kept";
+  const finalTrust =
+    status === "kept"
+      ? evaluateClaimTrust({
+          claim: input.claim,
+          facts: input.facts,
+          chunks: input.chunks,
+          sources: input.sources
+        })
+      : null;
+
+  return {
+    claimId: input.claim.id,
+    dimension: input.claim.dimension,
+    statement: input.claim.statement,
+    draftScore: draftTrust.score,
+    finalScore: finalTrust?.score ?? null,
+    delta: finalTrust ? finalTrust.score - draftTrust.score : null,
+    status,
+    draftRiskLevel: draftTrust.riskLevel,
+    finalRiskLevel: finalTrust?.riskLevel ?? null,
+    penalties: draftTrust.penalties.map((penalty) => penalty.code)
   };
 }
 
@@ -940,4 +1092,14 @@ function severityPenalty(severity: ReviewFinding["severity"]): number {
 
 function clampScore(score: number): number {
   return Math.max(0, Math.min(100, score));
+}
+
+function averageNullable(values: number[]): number | null {
+  if (values.length === 0) {
+    return null;
+  }
+
+  return Math.round(
+    values.reduce((total, value) => total + value, 0) / values.length
+  );
 }

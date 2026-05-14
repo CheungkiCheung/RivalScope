@@ -4,6 +4,7 @@ import {
   createAnalysisWorkflowAgents,
   createAnalystAgent,
   createApplyRepairAgent,
+  createClaimTrustSnapshotAgent,
   createCriticAgent,
   createExtractAgent,
   createFinalEvaluatorAgent,
@@ -128,7 +129,8 @@ describe("workflow runner", () => {
         createWorkflowNode("critique", "critique", ["write"]),
         createWorkflowNode("repair", "repair", ["critique"]),
         createWorkflowNode("apply_repair", "apply_repair", ["repair"]),
-        createWorkflowNode("final_eval", "final_eval", ["apply_repair"])
+        createWorkflowNode("final_eval", "final_eval", ["apply_repair"]),
+        createWorkflowNode("trust_snapshot", "trust_snapshot", ["final_eval"])
       ]
     });
 
@@ -148,7 +150,8 @@ describe("workflow runner", () => {
       "critique",
       "repair",
       "apply_repair",
-      "final_eval"
+      "final_eval",
+      "trust_snapshot"
     ]);
 
     const finalEvalNode = result.workflow.nodes.find(
@@ -1000,6 +1003,134 @@ describe("repair agent", () => {
     });
   });
 
+  it("creates before and after claim trust snapshots for repaired reports", async () => {
+    const snapshot = createClaimTrustSnapshotAgent();
+
+    const result = await runAgent(snapshot, {
+      projectId: "project_1",
+      artifacts: [
+        createSourcesArtifact([
+          {
+            id: "source_1",
+            projectId: "project_1",
+            kind: "url",
+            title: "Cursor pricing",
+            uri: "https://cursor.com/pricing",
+            collectedAt: "2026-05-13T00:00:00.000Z"
+          }
+        ]),
+        createSourceChunksArtifact([
+          {
+            id: "chunk_1",
+            sourceId: "source_1",
+            ordinal: 0,
+            text: "Cursor offers paid plans.",
+            tokenCount: 5
+          }
+        ]),
+        createFactsArtifact(),
+        createClaimsArtifact([
+          {
+            id: "claim_supported",
+            projectId: "project_1",
+            dimension: "pricing",
+            statement: "Cursor offers paid plans.",
+            factIds: ["fact_1"],
+            confidence: 0.84,
+            kind: "single_competitor"
+          },
+          {
+            id: "claim_overstated",
+            projectId: "project_1",
+            dimension: "pricing",
+            statement:
+              "Cursor guarantees the cheapest enterprise contract for every buyer.",
+            factIds: ["fact_1"],
+            confidence: 0.9,
+            kind: "comparative"
+          }
+        ]),
+        createReportArtifact([
+          {
+            id: "section_summary",
+            title: "Executive Summary",
+            body: [
+              "Cursor offers paid plans.",
+              "Cursor guarantees the cheapest enterprise contract for every buyer."
+            ].join("\n"),
+            claimIds: ["claim_supported", "claim_overstated"]
+          }
+        ]),
+        createRepairResultArtifact({
+          draftQualityScore: 100,
+          plannedQualityScore: 100,
+          actions: [
+            {
+              id: "repair_remove_claim_overstated",
+              type: "remove_claim_from_report",
+              targetType: "claim",
+              targetId: "claim_overstated",
+              severity: "high",
+              status: "planned",
+              reason:
+                "Claim claim_overstated has weak lexical support from cited evidence.",
+              repairSuggestion:
+                "Remove this claim or collect stronger evidence before publication."
+            }
+          ],
+          unresolvedGaps: []
+        }),
+        createReportArtifact(
+          [
+            {
+              id: "section_summary",
+              title: "Executive Summary",
+              body: "Cursor offers paid plans.",
+              claimIds: ["claim_supported"]
+            }
+          ],
+          {
+            appliedActionIds: ["repair_remove_claim_overstated"],
+            removedClaimIds: ["claim_overstated"]
+          }
+        ),
+        createFinalEvalArtifact({
+          draftQualityScore: 100,
+          repairedQualityScore: 100,
+          delta: 0
+        })
+      ]
+    });
+
+    expect(result.output.kind).toBe("claim_trust_snapshot");
+    expect(result.output.value).toMatchObject({
+      projectId: "project_1",
+      trustDelta: expect.any(Number),
+      claims: [
+        {
+          claimId: "claim_supported",
+          status: "kept",
+          finalScore: expect.any(Number)
+        },
+        {
+          claimId: "claim_overstated",
+          status: "removed",
+          finalScore: null,
+          finalRiskLevel: null
+        }
+      ]
+    });
+    const value = result.output.value as {
+      draftAverageTrust: number;
+      finalAverageTrust: number;
+      trustDelta: number;
+    };
+    expect(value.finalAverageTrust).toBeGreaterThan(value.draftAverageTrust);
+    expect(value.trustDelta).toBe(
+      value.finalAverageTrust - value.draftAverageTrust
+    );
+  });
+
   it("plans repair for structurally cited claims with weak semantic support", async () => {
     const repair = createRepairPlannerAgent();
 
@@ -1291,6 +1422,25 @@ function createRepairResultArtifact(value: {
       projectId: "project_1",
       ...value,
       delta: value.plannedQualityScore - value.draftQualityScore
+    }
+  };
+}
+
+function createFinalEvalArtifact(value: {
+  draftQualityScore: number;
+  repairedQualityScore: number;
+  delta: number;
+}) {
+  return {
+    id: "artifact_final_eval",
+    kind: "final_eval" as const,
+    createdAt: "2026-05-11T00:00:06.000Z",
+    value: {
+      projectId: "project_1",
+      status: value.delta > 0 ? "improved" : "unchanged",
+      ...value,
+      actions: [],
+      unresolvedGaps: []
     }
   };
 }

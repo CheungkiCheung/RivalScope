@@ -67,6 +67,11 @@ describe("runAnalysis helpers", () => {
         id: "final_eval",
         agentName: "final_eval",
         dependsOn: ["apply_repair"]
+      },
+      {
+        id: "trust_snapshot",
+        agentName: "trust_snapshot",
+        dependsOn: ["final_eval"]
       }
     ]);
   });

@@ -220,6 +220,17 @@ export function buildMvpWorkflowNodes(inputArtifactIds: string[]): WorkflowNode[
       outputArtifactIds: [],
       retryCount: 0,
       maxRetries: 1
+    },
+    {
+      id: "trust_snapshot",
+      type: "agent",
+      agentName: "trust_snapshot",
+      dependsOn: ["final_eval"],
+      status: "pending",
+      inputArtifactIds: [],
+      outputArtifactIds: [],
+      retryCount: 0,
+      maxRetries: 1
     }
   ];
 }

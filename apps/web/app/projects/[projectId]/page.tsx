@@ -340,9 +340,30 @@ export default async function ProjectPage({ params }: ProjectPageProps) {
                     <strong>
                       {repairSummary.delta && repairSummary.delta > 0
                         ? `+${repairSummary.delta}`
-                        : repairSummary.delta}
+                      : repairSummary.delta}
                     </strong>
                   </div>
+                  {repairSummary.claimTrust ? (
+                    <>
+                      <div className="trace-summary">
+                        <span className="metric-label">Trust Draft</span>
+                        <strong>{repairSummary.claimTrust.draftAverageTrust}</strong>
+                      </div>
+                      <div className="trace-summary">
+                        <span className="metric-label">Trust Final</span>
+                        <strong>{repairSummary.claimTrust.finalAverageTrust}</strong>
+                      </div>
+                      <div className="trace-summary">
+                        <span className="metric-label">Trust Delta</span>
+                        <strong>
+                          {repairSummary.claimTrust.delta !== null &&
+                          repairSummary.claimTrust.delta > 0
+                            ? `+${repairSummary.claimTrust.delta}`
+                            : repairSummary.claimTrust.delta}
+                        </strong>
+                      </div>
+                    </>
+                  ) : null}
                 </div>
                 <div className="list">
                   {repairSummary.actions.map((action) => (
@@ -371,6 +392,20 @@ export default async function ProjectPage({ params }: ProjectPageProps) {
                       </div>
                     </div>
                   ))}
+                  {repairSummary.claimTrust?.claims
+                    .filter((claim) => claim.status === "removed")
+                    .map((claim) => (
+                      <div className="item compact-item" key={claim.claimId}>
+                        <div className="item-head">
+                          <strong>{claim.dimension}</strong>
+                          <span className="status bad">removed</span>
+                        </div>
+                        <p className="muted">{claim.statement}</p>
+                        <span className="muted">
+                          trust {claim.draftScore} {"->"} removed
+                        </span>
+                      </div>
+                    ))}
                 </div>
               </div>
             )}
