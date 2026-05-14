@@ -58,7 +58,7 @@
 - Human review is represented as an unresolved repair action and UI gate, not yet as a first-class workflow checkpoint.
 - Export/evidence appendix and deployment hardening are still pending.
 - UI shows many panels but does not yet converge into a single polished “Intelligence Trace” story.
-- Branch synthesis currently records included/excluded claim ids but does not yet rewrite report sections based on synthesis policy.
+- Branch synthesis now gates Writer Agent report inclusion by `research_synthesis.includedClaimIds`; remaining work is export/evidence appendix and richer downgraded-claim explanations.
 
 ## Resources
 - RivalScope harness: `docs/top3-execution-harness.md`

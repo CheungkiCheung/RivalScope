@@ -389,7 +389,7 @@ The first implementation creates:
 
 Expected evidence insufficiency is encoded as branch-result data rather than thrown workflow failure. This keeps synthesis alive while still making the gap visible. The project page now shows Research Branches metrics, branch rows, and evidence-gap details.
 
-Current limitation: Phase 5 does not yet create dynamic per-branch workflow nodes, and synthesis does not yet rewrite the final report to exclude unsupported branch outputs. Those are follow-up hardening tasks, not blockers for the first routed-DAG proof.
+Current limitation: Phase 5 does not yet create dynamic per-branch workflow nodes. Synthesis now gates Writer Agent claim inclusion, but evidence appendix/export and richer downgraded-claim explanations are still follow-up hardening tasks.
 
 ## Phase Order
 
@@ -526,7 +526,8 @@ Phase 4 completion gate:
 Remaining hardening:
 
 - Convert artifact-level branches into explicit fan-out/fan-in workflow groups if it improves demo clarity without destabilizing the runner.
-- Make `research_synthesis` directly control final report inclusion/exclusion and record downgraded claims.
+- Done for first slice: make `research_synthesis` directly control final report inclusion/exclusion.
+- Record downgraded claims with explicit reasons, not just excluded ids.
 - Add a seeded demo fixture that intentionally includes one weak competitor/dimension branch.
 
 ### Phase 5: Delivery And Demo Hardening
@@ -799,4 +800,4 @@ The next implementation milestone is Phase 6:
 Delivery And Demo Hardening
 ```
 
-Start by making the routed research synthesis policy visible in the final report path: included claims, excluded/downgraded claims, and evidence appendix entries should line up across Research Branches, Claim Trust Graph, Repair Loop, and exported report.
+Current sub-slice: routed research synthesis policy now gates Writer Agent claim inclusion. Continue by making evidence appendix entries line up across Research Branches, Claim Trust Graph, Repair Loop, and exported report.

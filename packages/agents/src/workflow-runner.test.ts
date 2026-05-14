@@ -2097,6 +2097,58 @@ describe("repair agent", () => {
 });
 
 describe("writer agent", () => {
+  it("uses research synthesis to exclude claims from failed branches before report writing", async () => {
+    const writer = createWriterAgent();
+
+    const result = await runAgent(writer, {
+      projectId: "project_1",
+      artifacts: [
+        createClaimsArtifact([
+          {
+            id: "claim_included",
+            projectId: "project_1",
+            dimension: "pricing",
+            statement: "Cursor offers paid plans.",
+            factIds: ["fact_1"],
+            confidence: 0.84,
+            kind: "single_competitor"
+          },
+          {
+            id: "claim_excluded",
+            projectId: "project_1",
+            dimension: "pricing",
+            statement: "Codex pricing is fully proven.",
+            factIds: ["fact_missing"],
+            confidence: 0.51,
+            kind: "single_competitor"
+          }
+        ]),
+        createResearchSynthesisArtifact({
+          includedClaimIds: ["claim_included"],
+          excludedClaimIds: ["claim_excluded"]
+        })
+      ]
+    });
+
+    expect(result.output.kind).toBe("report");
+    expect(result.output.value).toMatchObject({
+      sections: [
+        {
+          id: "section_summary",
+          body: "Cursor offers paid plans.",
+          claimIds: ["claim_included"]
+        }
+      ],
+      synthesis: {
+        includedClaimIds: ["claim_included"],
+        excludedClaimIds: ["claim_excluded"]
+      }
+    });
+    expect(JSON.stringify(result.output.value)).not.toContain(
+      "Codex pricing is fully proven."
+    );
+  });
+
   it("rejects report sections that cite unknown claims before emitting a report artifact", async () => {
     const writer = createWriterAgent({
       buildSections: () => [
@@ -2479,6 +2531,32 @@ function createResearchBranchResultsArtifact(value: {
     value: {
       projectId: "project_1",
       branchResults: value.branchResults
+    }
+  };
+}
+
+function createResearchSynthesisArtifact(value: {
+  includedClaimIds: string[];
+  excludedClaimIds: string[];
+}) {
+  return {
+    id: "artifact_research_synthesis",
+    kind: "research_synthesis" as const,
+    createdAt: "2026-05-11T00:00:05.000Z",
+    value: {
+      projectId: "project_1",
+      totalBranches: 2,
+      succeededBranches: 1,
+      partialBranches: 0,
+      failedBranches: 1,
+      synthesisPolicy: {
+        allowPartialBranches: true,
+        requireEvidenceForClaimInclusion: true
+      },
+      evidenceGaps: [],
+      branchResults: [],
+      includedClaimIds: value.includedClaimIds,
+      excludedClaimIds: value.excludedClaimIds
     }
   };
 }

@@ -829,29 +829,59 @@ export function createWriterAgent(options: WriterAgentOptions = {}): WorkflowAge
         input.artifacts,
         "claims"
       ).claims;
+      const synthesis = getOptionalLatestArtifactValue<ResearchSynthesis>(
+        input.artifacts,
+        "research_synthesis"
+      );
+      const reportClaims = applySynthesisClaimGate({
+        claims,
+        ...(synthesis ? { synthesis } : {})
+      });
       const sections =
-        options.buildSections?.(claims) ??
+        options.buildSections?.(reportClaims) ??
         [
           {
             id: "section_summary",
             title: "Executive Summary",
-            body: claims.map((claim) => claim.statement).join("\n"),
-            claimIds: claims.map((claim) => claim.id)
+            body: reportClaims.map((claim) => claim.statement).join("\n"),
+            claimIds: reportClaims.map((claim) => claim.id)
           }
         ];
 
-      assertReportSectionsCiteKnownClaims(sections, claims);
+      assertReportSectionsCiteKnownClaims(sections, reportClaims);
 
       return {
         kind: "report",
         value: {
           projectId: input.projectId,
           title: "Competitive Intelligence Report",
-          sections
+          sections,
+          ...(synthesis
+            ? {
+                synthesis: {
+                  includedClaimIds: synthesis.includedClaimIds,
+                  excludedClaimIds: synthesis.excludedClaimIds,
+                  evidenceGapIds: synthesis.evidenceGaps.map((gap) => gap.id)
+                }
+              }
+            : {})
         }
       };
     }
   };
+}
+
+function applySynthesisClaimGate(input: {
+  claims: Claim[];
+  synthesis?: ResearchSynthesis;
+}): Claim[] {
+  if (!input.synthesis) {
+    return input.claims;
+  }
+
+  const includedClaimIds = new Set(input.synthesis.includedClaimIds);
+
+  return input.claims.filter((claim) => includedClaimIds.has(claim.id));
 }
 
 function assertReportSectionsCiteKnownClaims(

@@ -80,6 +80,16 @@
 - Current next phase:
   - Phase 6 - Delivery And Demo Hardening, with likely sub-slice first: synthesis policy should influence final report inclusion/exclusion more directly.
 
+### Phase 6.1: Synthesis-Gated Report Writing
+- **Status:** in progress
+- **Started:** 2026-05-15 00:00 CST
+- Actions taken:
+  - Created branch `codex/synthesis-report-gating`.
+  - Added RED coverage proving Writer must exclude claims outside `research_synthesis.includedClaimIds`.
+  - Updated Writer Agent to filter report claims through the latest `research_synthesis` artifact.
+  - Added report-level synthesis summary with included claim ids, excluded claim ids, and evidence gap ids.
+  - Added Report UI pills for synthesis included/excluded counts.
+
 ## Test Results
 | Test | Expected | Actual | Status |
 |------|----------|--------|--------|
@@ -95,6 +105,8 @@
 | RED tests for routed research | Focused tests fail before implementation | Failed on missing research agents and old web DAG shape as expected | pass |
 | Focused routed research tests | Branch planning, branch results, synthesis, web DAG, UI parser, and persistence pass | 39 focused tests passed | pass |
 | Typecheck after routed research | TypeScript strict checks pass | `npm run typecheck` passed | pass |
+| RED test for synthesis-gated writing | Writer includes excluded claim before implementation | Failed with excluded claim still present in report body and claimIds | pass |
+| Focused synthesis-gated writing tests | Writer filters report by synthesis included ids | `workflow-runner` and `project-research-summary` focused suites passed | pass |
 
 ## Error Log
 | Timestamp | Error | Attempt | Resolution |
@@ -109,11 +121,11 @@
 ## 5-Question Reboot Check
 | Question | Answer |
 |----------|--------|
-| Where am I? | Phase 5 - Routed Research DAG first slice is implemented. |
-| Where am I going? | Harden the demo path and make synthesis policy affect final report inclusion/exclusion more directly. |
+| Where am I? | Phase 6.1 - Synthesis-Gated Report Writing is in progress. |
+| Where am I going? | Finish verification, update docs, then continue toward evidence appendix/export and demo hardening. |
 | What's the goal? | Build RivalScope into a ByteDance top-3-caliber competitor-intelligence Agent OS. |
 | What have I learned? | `planning-with-files` is best used here as persistent `.planning` memory plus active-plan isolation, not as a wholesale framework import. |
-| What have I done? | Completed the reproducible judge calibration runner, calibration-gated repair policy, and first routed research DAG slice. |
+| What have I done? | Completed the reproducible judge calibration runner, calibration-gated repair policy, first routed research DAG slice, and initial Writer gating by synthesis policy. |
 
 ---
 Update this log after each completed phase, significant discovery, or failed attempt.

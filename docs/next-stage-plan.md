@@ -301,7 +301,7 @@ Tasks:
 2. Done for first slice: Add branch-level evidence evaluation through `research_branch_results`.
 3. Done for first slice: Add `research_synthesis` fan-in with included claim ids, excluded claim ids, and structured evidence gaps.
 4. Pending: Add explicit per-competitor workflow groups if judge clarity requires it.
-5. Pending: Make synthesis policy directly govern final report inclusion/exclusion.
+5. Done for first slice: Make synthesis policy directly govern final report inclusion/exclusion.
 6. Pending: Add checkpoint/resume behavior for partially completed runs.
 7. Pending: Add optional human approval before report publication.
 

@@ -188,6 +188,16 @@ export default async function ProjectPage({ params }: ProjectPageProps) {
                   <span className="pill">Quality {latestReport.qualityScore}</span>
                 ) : null}
                 <span className="pill">Sections {latestReport.sections.length}</span>
+                {researchSummary.status !== "not_started" ? (
+                  <>
+                    <span className="pill">
+                      Synthesis Included {researchSummary.includedClaimIds.length}
+                    </span>
+                    <span className="pill">
+                      Excluded {researchSummary.excludedClaimIds.length}
+                    </span>
+                  </>
+                ) : null}
               </div>
               <h2>{latestReport.title}</h2>
               {reportSections.map((section) => (
