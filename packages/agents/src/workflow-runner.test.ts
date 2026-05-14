@@ -609,6 +609,42 @@ describe("research routing agents", () => {
     });
   });
 
+  it("excludes branch claims that cite unknown facts from synthesis inclusion", async () => {
+    const branchAgent = createResearchBranchAgent();
+
+    const result = await runAgent(branchAgent, {
+      projectId: "project_1",
+      artifacts: [
+        createResearchPlanArtifact(),
+        createFactsArtifact(),
+        createClaimsArtifact([
+          {
+            id: "claim_mixed_known_and_unknown",
+            projectId: "project_1",
+            dimension: "pricing",
+            statement: "Cursor offers paid plans and undocumented enterprise terms.",
+            factIds: ["fact_1", "fact_missing"],
+            confidence: 0.78,
+            kind: "single_competitor"
+          }
+        ])
+      ]
+    });
+
+    expect(result.output.kind).toBe("research_branch_results");
+    expect(result.output.value).toMatchObject({
+      branchResults: expect.arrayContaining([
+        expect.objectContaining({
+          branchId: "branch_cursor_pricing",
+          status: "partial",
+          factIds: ["fact_1"],
+          claimIds: [],
+          evidenceGapIds: ["gap_cursor_pricing_invalid_claim_citations"]
+        })
+      ])
+    });
+  });
+
   it("synthesizes successful branches and failed branch gaps into one artifact", async () => {
     const synthesis = createResearchSynthesisAgent();
 

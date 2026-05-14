@@ -26,6 +26,7 @@ export interface CollectSourcesInput {
   searchProvider: SearchProvider;
   documentsByUrl?: Record<string, string>;
   maxWordsPerChunk?: number;
+  resultsPerDimension?: number;
 }
 
 export interface CollectedSource {
@@ -86,46 +87,55 @@ export async function collectSources(
   const chunkTextTool = createChunkTextTool();
   const sources: CollectedSource[] = [];
 
+  const seenUrls = new Set<string>();
+
   for (const competitor of input.competitors) {
-    const search = await context.callTool(searchTool, {
-      competitor,
-      dimensions: input.dimensions,
-      limit: 1
-    });
-
-    for (const result of search.results) {
-      const fetched = await callToolOrSkip(context, fetchTool, {
-        url: result.url,
-        maxBytes: 500_000
+    for (const dimensions of buildDimensionSearchBatches(input.dimensions)) {
+      const search = await context.callTool(searchTool, {
+        competitor,
+        dimensions,
+        limit: input.resultsPerDimension ?? 2
       });
 
-      if (!fetched || fetched.status < 200 || fetched.status >= 300) {
-        continue;
+      for (const result of search.results) {
+        if (seenUrls.has(result.url)) {
+          continue;
+        }
+
+        seenUrls.add(result.url);
+        const fetched = await callToolOrSkip(context, fetchTool, {
+          url: result.url,
+          maxBytes: 500_000
+        });
+
+        if (!fetched || fetched.status < 200 || fetched.status >= 300) {
+          continue;
+        }
+
+        const text = await context.callTool(htmlToTextTool, {
+          html: fetched.body
+        });
+        const sourceId = createStableSourceId(competitor, result.url);
+        const chunks = await context.callTool(chunkTextTool, {
+          sourceId,
+          text: text.text,
+          maxWords: input.maxWordsPerChunk ?? 180
+        });
+
+        sources.push({
+          kind: "URL",
+          title: normalizeSourceTitle({
+            title: result.title,
+            url: result.url
+          }),
+          uri: result.url,
+          chunks: chunks.chunks.map((chunk) => ({
+            ordinal: chunk.ordinal,
+            text: chunk.text,
+            tokenCount: chunk.tokenCount
+          }))
+        });
       }
-
-      const text = await context.callTool(htmlToTextTool, {
-        html: fetched.body
-      });
-      const sourceId = createStableSourceId(competitor, result.url);
-      const chunks = await context.callTool(chunkTextTool, {
-        sourceId,
-        text: text.text,
-        maxWords: input.maxWordsPerChunk ?? 180
-      });
-
-      sources.push({
-        kind: "URL",
-        title: normalizeSourceTitle({
-          title: result.title,
-          url: result.url
-        }),
-        uri: result.url,
-        chunks: chunks.chunks.map((chunk) => ({
-          ordinal: chunk.ordinal,
-          text: chunk.text,
-          tokenCount: chunk.tokenCount
-        }))
-      });
     }
   }
 
@@ -133,6 +143,14 @@ export async function collectSources(
     sources,
     toolCalls: context.getToolCalls()
   };
+}
+
+function buildDimensionSearchBatches(dimensions: string[]): string[][] {
+  if (dimensions.length === 0) {
+    return [[]];
+  }
+
+  return dimensions.map((dimension) => [dimension]);
 }
 
 async function callToolOrSkip<I, O>(

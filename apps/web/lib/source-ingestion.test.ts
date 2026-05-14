@@ -36,7 +36,7 @@ describe("source ingestion", () => {
       {
         competitor: "Cursor",
         dimensions: ["pricing"],
-        limit: 1
+        limit: 2
       }
     ]);
     expect(result.sources[0]).toMatchObject({
@@ -44,6 +44,67 @@ describe("source ingestion", () => {
       title: "Cursor real result",
       uri: "https://real.example/cursor"
     });
+  });
+
+  test("collectSources searches each competitor and dimension independently with URL dedupe", async () => {
+    const calls: unknown[] = [];
+    const result = await collectSources({
+      competitors: ["Cursor"],
+      dimensions: ["pricing", "developer_experience"],
+      searchProvider: {
+        name: "test",
+        search: async (input) => {
+          calls.push(input);
+          const dimension = input.dimensions?.[0];
+
+          return {
+            results: [
+              {
+                title: `Cursor ${dimension}`,
+                url:
+                  dimension === "pricing"
+                    ? "https://real.example/cursor/pricing"
+                    : "https://real.example/cursor/developer-experience",
+                snippet: "dimension-specific result",
+                competitor: "Cursor",
+                rank: 1
+              },
+              {
+                title: "Duplicate overview",
+                url: "https://real.example/cursor/pricing",
+                snippet: "duplicate URL",
+                competitor: "Cursor",
+                rank: 2
+              }
+            ]
+          };
+        }
+      },
+      documentsByUrl: {
+        "https://real.example/cursor/pricing":
+          "<main><h1>Cursor pricing</h1><p>Pricing plans.</p></main>",
+        "https://real.example/cursor/developer-experience":
+          "<main><h1>Cursor developer experience</h1><p>Editor workflow.</p></main>"
+      },
+      maxWordsPerChunk: 8
+    });
+
+    expect(calls).toEqual([
+      {
+        competitor: "Cursor",
+        dimensions: ["pricing"],
+        limit: 2
+      },
+      {
+        competitor: "Cursor",
+        dimensions: ["developer_experience"],
+        limit: 2
+      }
+    ]);
+    expect(result.sources.map((source) => source.uri)).toEqual([
+      "https://real.example/cursor/pricing",
+      "https://real.example/cursor/developer-experience"
+    ]);
   });
 
   test("collectSources skips failed fetches and keeps successful source collection running", async () => {
@@ -165,9 +226,11 @@ describe("source ingestion", () => {
       "html_to_text",
       "chunk_text",
       "fixture_search",
+      "fixture_search",
       "fetch_url",
       "html_to_text",
-      "chunk_text"
+      "chunk_text",
+      "fixture_search"
     ]);
   });
 });

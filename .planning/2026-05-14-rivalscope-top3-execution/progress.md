@@ -111,6 +111,17 @@
   - Verified idempotency against a temporary local Postgres container on port `15433`; repeated seed left one scoped demo project.
   - Docker Compose `postgres:16-alpine` pull was blocked by Docker Hub TLS timeout, so validation used already available local image `postgres:18-alpine` without changing project compose files.
 
+### Core Quality Hardening: Source Coverage And Branch Citation Validity
+- **Status:** in progress
+- **Started:** 2026-05-15
+- Actions taken:
+  - Created branch `codex/core-quality-hardening`.
+  - Added TDD coverage proving routed research must exclude claims with incomplete fact citation chains from synthesis inclusion.
+  - Updated routed research branch evaluation so a claim is valid for a competitor/dimension branch only when all cited facts exist and match that exact branch.
+  - Added explicit `invalid_claim_citations` evidence gaps and partial branch status when facts exist but the branch claim is not publication-safe.
+  - Added TDD coverage for source collection by competitor × dimension, with URL dedupe.
+  - Updated source ingestion so each competitor/dimension pair gets its own search request and duplicate URLs are skipped before fetch/chunk persistence.
+
 ## Test Results
 | Test | Expected | Actual | Status |
 |------|----------|--------|--------|
@@ -136,6 +147,12 @@
 | Demo seed DB run | Script creates project and prints project/export URLs | Passed against temporary Postgres on `localhost:15433` | pass |
 | Demo seed idempotency | Repeated run leaves one scoped demo project | SQL count for owner/name returned `1` | pass |
 | Full verification after demo seed | Typecheck/test/evals/build/audit/secret scan pass | Passed; known moderate Next/PostCSS audit advisory remains non-blocking | pass |
+| RED test for invalid branch citations | Branch incorrectly includes claim citing unknown fact | Failed with `claim_mixed_known_and_unknown` included in succeeded branch | pass |
+| Focused routed research hardening | Invalid citation claim excluded and branch marked partial | `packages/agents/src/workflow-runner.test.ts -t "research routing agents"` passed | pass |
+| RED test for dimension source search | Source ingestion searches all dimensions together once | Failed with one combined search call | pass |
+| Focused source ingestion hardening | Per-dimension search and URL dedupe work | `apps/web/lib/source-ingestion.test.ts` passed | pass |
+| Related core tests after hardening | Source tooling, seed demo, source persistence, workflow runner pass | 5 focused suites / 52 tests passed | pass |
+| Typecheck after core hardening | TypeScript strict checks pass | `npm run typecheck` passed | pass |
 
 ## Error Log
 | Timestamp | Error | Attempt | Resolution |
@@ -151,11 +168,11 @@
 ## 5-Question Reboot Check
 | Question | Answer |
 |----------|--------|
-| Where am I? | Phase 6 - Delivery And Demo Hardening; stable seeded demo script is complete. |
-| Where am I going? | Continue to deployment/canary verification and README/interview narrative hardening. |
+| Where am I? | Core hardening branch is in progress after user prioritized internals over display polish. |
+| Where am I going? | Finish source/DAG/facts/report/eval hardening slices, then return to deployment and demo narrative. |
 | What's the goal? | Build RivalScope into a ByteDance top-3-caliber competitor-intelligence Agent OS. |
 | What have I learned? | `planning-with-files` is best used here as persistent `.planning` memory plus active-plan isolation, not as a wholesale framework import. |
-| What have I done? | Completed calibration runner, calibration-gated repair policy, routed research DAG, synthesis-gated writing, evidence appendix export, and a reproducible offline seeded demo script. |
+| What have I done? | Completed calibration runner, calibration-gated repair policy, routed research DAG, synthesis-gated writing, evidence appendix export, reproducible offline seeded demo script, and first core hardening slice for source coverage plus branch citation validity. |
 
 ---
 Update this log after each completed phase, significant discovery, or failed attempt.

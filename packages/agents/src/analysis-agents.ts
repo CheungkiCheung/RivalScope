@@ -567,15 +567,19 @@ function buildResearchBranchResult(input: {
       fact.dimension === input.branch.dimension
   );
   const factIds = new Set(facts.map((fact) => fact.id));
-  const claims = input.claims.filter(
-    (claim) =>
-      claim.dimension === input.branch.dimension &&
-      claim.factIds.some((factId) => factIds.has(factId))
+  const branchClaims = input.claims.filter(
+    (claim) => claim.dimension === input.branch.dimension
+  );
+  const claims = branchClaims.filter((claim) =>
+    isValidBranchClaim({
+      claim,
+      branch: input.branch,
+      factById: input.factById
+    })
   );
   const claimIds = new Set(claims.map((claim) => claim.id));
-  const claimsWithMissingFacts = input.claims.filter(
+  const claimsWithMissingFacts = branchClaims.filter(
     (claim) =>
-      claim.dimension === input.branch.dimension &&
       claim.factIds.some((factId) => {
         const fact = input.factById.get(factId);
 
@@ -583,16 +587,25 @@ function buildResearchBranchResult(input: {
       }) &&
       !claimIds.has(claim.id)
   );
+  const claimsWithInvalidCitations = branchClaims.filter((claim) =>
+    hasInvalidBranchCitations({
+      claim,
+      branch: input.branch,
+      factById: input.factById
+    })
+  );
   const evidenceGapIds = buildResearchEvidenceGapIds({
     branch: input.branch,
     factCount: facts.length,
     claimCount: claims.length,
-    claimsWithMissingFactsCount: claimsWithMissingFacts.length
+    claimsWithMissingFactsCount: claimsWithMissingFacts.length,
+    invalidClaimCitationCount: claimsWithInvalidCitations.length
   });
   const status = getResearchBranchStatus({
     factCount: facts.length,
     claimCount: claims.length,
-    evidenceGapCount: evidenceGapIds.length
+    evidenceGapCount: evidenceGapIds.length,
+    invalidClaimCitationCount: claimsWithInvalidCitations.length
   });
 
   return {
@@ -607,16 +620,61 @@ function buildResearchBranchResult(input: {
   };
 }
 
+function isValidBranchClaim(input: {
+  claim: Claim;
+  branch: ResearchBranchPlan;
+  factById: Map<string, Fact>;
+}): boolean {
+  if (input.claim.factIds.length === 0) {
+    return false;
+  }
+
+  return input.claim.factIds.every((factId) => {
+    const fact = input.factById.get(factId);
+
+    return (
+      fact !== undefined &&
+      fact.competitorId === input.branch.competitorId &&
+      fact.dimension === input.branch.dimension
+    );
+  });
+}
+
+function hasInvalidBranchCitations(input: {
+  claim: Claim;
+  branch: ResearchBranchPlan;
+  factById: Map<string, Fact>;
+}): boolean {
+  const hasBranchFact = input.claim.factIds.some((factId) => {
+    const fact = input.factById.get(factId);
+
+    return (
+      fact !== undefined &&
+      fact.competitorId === input.branch.competitorId &&
+      fact.dimension === input.branch.dimension
+    );
+  });
+
+  return hasBranchFact && !isValidBranchClaim(input);
+}
+
 function buildResearchEvidenceGapIds(input: {
   branch: ResearchBranchPlan;
   factCount: number;
   claimCount: number;
   claimsWithMissingFactsCount: number;
+  invalidClaimCitationCount: number;
 }): string[] {
   if (input.factCount === 0) {
     return [`gap_${input.branch.competitorId}_${input.branch.dimension}_no_facts`].map(
       toStableId
     );
+  }
+
+  if (input.invalidClaimCitationCount > 0) {
+    return [
+      `gap_${input.branch.competitorId}_${input.branch.dimension}_invalid_claim_citations`
+    ].map(toStableId);
   }
 
   if (input.claimCount === 0 || input.claimsWithMissingFactsCount > 0) {
@@ -632,8 +690,17 @@ function getResearchBranchStatus(input: {
   factCount: number;
   claimCount: number;
   evidenceGapCount: number;
+  invalidClaimCitationCount?: number;
 }): ResearchBranchResult["status"] {
-  if (input.factCount === 0 || input.claimCount === 0) {
+  if (input.factCount === 0) {
+    return "failed";
+  }
+
+  if (input.invalidClaimCitationCount && input.invalidClaimCitationCount > 0) {
+    return "partial";
+  }
+
+  if (input.claimCount === 0) {
     return "failed";
   }
 
