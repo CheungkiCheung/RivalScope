@@ -11,6 +11,7 @@
   "scripts": {
     "test": "vitest run",
     "test:watch": "vitest",
+    "demo:seed": "node --import tsx apps/web/scripts/seed-demo-project.ts",
     "eval:golden": "npm run eval:golden --workspace @rivalscope/evals",
     "typecheck": "tsc --noEmit",
     "build": "npm run build --workspaces --if-present"

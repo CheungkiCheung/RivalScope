@@ -171,6 +171,14 @@ Push the schema to a running local database:
 DATABASE_URL="postgresql://postgres:postgres@localhost:5432/rivalscope?schema=public" npm run db:push --workspace @rivalscope/db
 ```
 
+Seed the reproducible top-3 demo project:
+
+```bash
+DATABASE_URL="postgresql://postgres:postgres@localhost:5432/rivalscope?schema=public" npm run demo:seed
+```
+
+The seed command is deterministic and offline. It recreates only the scoped demo project named `RivalScope Top-3 Demo` for `demo@rivalscope.local`, loads Cursor/Codex/Trae fixture sources, marks the project with `[demo:repair_lift]`, persists source-collection tool-call observability, and prints the project plus Markdown/JSON export URLs. Set `RIVALSCOPE_BASE_URL` if the local web server is not running on `http://localhost:3100`.
+
 Run the web MVP:
 
 ```bash

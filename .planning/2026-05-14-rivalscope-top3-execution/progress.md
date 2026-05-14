@@ -100,6 +100,17 @@
   - Added project export route at `/projects/[projectId]/export?format=markdown|json`.
   - Added project-page `Export MD` and `Export JSON` actions.
 
+### Phase 6.3: Stable Seeded Demo Script
+- **Status:** complete
+- **Completed:** 2026-05-15 00:32 CST
+- Actions taken:
+  - Created branch `codex/seeded-demo-script`.
+  - Added `buildSeedDemoProjectInput()` as a deterministic offline demo contract for Cursor, Codex, and Trae.
+  - Added root `npm run demo:seed` script.
+  - Added `apps/web/scripts/seed-demo-project.ts`, which requires `DATABASE_URL`, deletes only the scoped demo project for `demo@rivalscope.local`, recreates seeded competitors/dimensions/sources, persists source collection tool-call observability, and prints project/export URLs.
+  - Verified idempotency against a temporary local Postgres container on port `15433`; repeated seed left one scoped demo project.
+  - Docker Compose `postgres:16-alpine` pull was blocked by Docker Hub TLS timeout, so validation used already available local image `postgres:18-alpine` without changing project compose files.
+
 ## Test Results
 | Test | Expected | Actual | Status |
 |------|----------|--------|--------|
@@ -119,6 +130,12 @@
 | Focused synthesis-gated writing tests | Writer filters report by synthesis included ids | `workflow-runner` and `project-research-summary` focused suites passed | pass |
 | RED tests for report export | Export modules do not exist before implementation | Failed on missing `report-export` and `report-export-route` modules | pass |
 | Focused report export tests | JSON/Markdown export and attachment responses are generated | `report-export` and `report-export-route` focused suites passed | pass |
+| RED test for demo seed helper | `demo-project-seed` module is absent | Failed on missing module as expected | pass |
+| Focused demo seed helper test | Offline demo contract is deterministic and contains sources | `apps/web/lib/demo-project-seed.test.ts` passed | pass |
+| Demo seed missing DB guard | Script fails clearly without `DATABASE_URL` | `npm run demo:seed` exited 1 with required env message | pass |
+| Demo seed DB run | Script creates project and prints project/export URLs | Passed against temporary Postgres on `localhost:15433` | pass |
+| Demo seed idempotency | Repeated run leaves one scoped demo project | SQL count for owner/name returned `1` | pass |
+| Full verification after demo seed | Typecheck/test/evals/build/audit/secret scan pass | Passed; known moderate Next/PostCSS audit advisory remains non-blocking | pass |
 
 ## Error Log
 | Timestamp | Error | Attempt | Resolution |
@@ -129,15 +146,16 @@
 | 2026-05-14 23:13 CST | Typecheck rejected direct `process.env`, readonly recorder reassignment, and loose usage reduce typing | 1 | Added explicit env extraction, mutable private recorder list with immutable getter, and typed usage accumulator. |
 | 2026-05-14 23:23 CST | zsh treated `[projectId]` in a path as a glob | 1 | Re-ran the read command with the path quoted. |
 | 2026-05-14 23:31 CST | `exactOptionalPropertyTypes` rejected optional properties explicitly passed as `undefined` | 1 | Built optional objects only when values exist. |
+| 2026-05-15 00:28 CST | `docker compose up -d postgres` could not pull `postgres:16-alpine` due to Docker Hub TLS handshake timeout | 2 | Used existing local `postgres:18-alpine` image in a temporary `rivalscope-seed-postgres` container on port `15433` for DB verification. |
 
 ## 5-Question Reboot Check
 | Question | Answer |
 |----------|--------|
-| Where am I? | Phase 6.1 - Synthesis-Gated Report Writing is in progress. |
-| Where am I going? | Finish verification, update docs, then continue toward evidence appendix/export and demo hardening. |
+| Where am I? | Phase 6 - Delivery And Demo Hardening; stable seeded demo script is complete. |
+| Where am I going? | Continue to deployment/canary verification and README/interview narrative hardening. |
 | What's the goal? | Build RivalScope into a ByteDance top-3-caliber competitor-intelligence Agent OS. |
 | What have I learned? | `planning-with-files` is best used here as persistent `.planning` memory plus active-plan isolation, not as a wholesale framework import. |
-| What have I done? | Completed the reproducible judge calibration runner, calibration-gated repair policy, first routed research DAG slice, and initial Writer gating by synthesis policy. |
+| What have I done? | Completed calibration runner, calibration-gated repair policy, routed research DAG, synthesis-gated writing, evidence appendix export, and a reproducible offline seeded demo script. |
 
 ---
 Update this log after each completed phase, significant discovery, or failed attempt.

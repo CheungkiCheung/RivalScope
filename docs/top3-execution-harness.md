@@ -538,9 +538,8 @@ Required deliverables:
 
 - Done for first slice: Markdown and JSON report export.
 - Done for first slice: Evidence appendix.
-- Stable seeded demo project.
+- Done: Stable seeded demo project and offline `npm run demo:seed` script.
 - Deployment.
-- Demo script.
 - README competition narrative.
 
 Phase 5 completion gate:
@@ -800,4 +799,23 @@ The next implementation milestone is Phase 6:
 Delivery And Demo Hardening
 ```
 
-Current sub-slice: routed research synthesis policy gates Writer Agent claim inclusion, and Markdown/JSON exports now include an evidence appendix. Continue with a stable seeded demo script, deployment verification, and README/interview narrative.
+Current sub-slice: routed research synthesis policy gates Writer Agent claim inclusion, Markdown/JSON exports now include an evidence appendix, and `npm run demo:seed` creates an idempotent offline Cursor/Codex/Trae demo project with `[demo:repair_lift]`. Continue with deployment verification and README/interview narrative.
+
+## Stable Demo Seed
+
+The competition demo can be bootstrapped without network credentials:
+
+```bash
+DATABASE_URL="postgresql://postgres:postgres@localhost:5432/rivalscope?schema=public" npm run db:push --workspace @rivalscope/db
+DATABASE_URL="postgresql://postgres:postgres@localhost:5432/rivalscope?schema=public" npm run demo:seed
+DATABASE_URL="postgresql://postgres:postgres@localhost:5432/rivalscope?schema=public" npm run dev --workspace @rivalscope/web -- --port 3100
+```
+
+The seed script:
+
+- Recreates only `RivalScope Top-3 Demo` owned by `demo@rivalscope.local`.
+- Loads deterministic fixture sources for Cursor, Codex, and Trae.
+- Creates required `pricing`, `positioning`, and `developer_experience` dimensions.
+- Adds `[demo:repair_lift]` so the analysis DAG proves repair lift repeatably.
+- Persists source collection tool calls so the demo starts with trace evidence, not a hidden fixture.
+- Prints project, Markdown export, and JSON export URLs.

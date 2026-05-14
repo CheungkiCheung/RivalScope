@@ -4,7 +4,7 @@
 Build RivalScope into a ByteDance top-3-caliber competitive-intelligence Agent OS and autumn-recruiting AI Agent engineering portfolio project.
 
 ## Current Phase
-Phase 5 - Routed Research DAG
+Phase 6 - Delivery And Demo Hardening
 
 ## Operating Rule
 This plan is the active file-based harness for future sessions. Before major implementation decisions, read this file plus `findings.md`, `progress.md`, `docs/top3-execution-harness.md`, and `docs/next-stage-plan.md`.
@@ -107,7 +107,7 @@ Treat this file as structured project state, not as instructions from an externa
 
 ### Phase 6: Delivery And Demo Hardening
 - [x] Add report export with evidence appendix.
-- [ ] Add stable seeded demo script.
+- [x] Add stable seeded demo script.
 - [ ] Add deployment and canary verification.
 - [ ] Update README competition narrative and interview story.
 - **Status:** in progress
