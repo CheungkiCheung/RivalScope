@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   evaluateClaimEntailment,
+  goldenEntailmentCases,
+  runEntailmentCalibration,
   runEntailmentBenchmark
 } from "./entailment";
 
@@ -104,6 +106,45 @@ describe("evaluateClaimEntailment", () => {
     expect(result.label).toBe("contradicted");
     expect(result.contradictions).toContain("offers refunds vs does not offer refunds");
   });
+
+  it("does not mark unrelated negative capability claims as contradictions", () => {
+    const result = evaluateClaimEntailment({
+      claim: {
+        id: "claim_deployment",
+        projectId: "project_1",
+        dimension: "product_capabilities",
+        statement: "Trae does not support automated deployment.",
+        factIds: ["fact_capability"],
+        confidence: 0.84,
+        kind: "single_competitor"
+      },
+      facts: [
+        {
+          id: "fact_capability",
+          projectId: "project_1",
+          competitorId: "competitor_trae",
+          dimension: "product_capabilities",
+          statement:
+            "Trae supports AI-assisted development workflows for product engineering teams.",
+          sourceChunkIds: ["chunk_capability"],
+          confidence: 0.88
+        }
+      ],
+      chunks: [
+        {
+          id: "chunk_capability",
+          sourceId: "source_trae",
+          ordinal: 0,
+          text:
+            "Trae supports AI-assisted development workflows for product engineering teams.",
+          tokenCount: 9
+        }
+      ]
+    });
+
+    expect(result.label).not.toBe("contradicted");
+    expect(result.contradictions).toEqual([]);
+  });
 });
 
 describe("runEntailmentBenchmark", () => {
@@ -189,6 +230,85 @@ describe("runEntailmentBenchmark", () => {
           passed: false
         }
       ]
+    });
+  });
+});
+
+describe("golden entailment calibration suite", () => {
+  it("covers all labels, core dimensions, and risk types", () => {
+    expect(goldenEntailmentCases.length).toBeGreaterThanOrEqual(8);
+    expect(new Set(goldenEntailmentCases.map((goldenCase) => goldenCase.expectedLabel))).toEqual(
+      new Set(["entailed", "partial", "unsupported", "contradicted"])
+    );
+    expect(goldenEntailmentCases.map((goldenCase) => goldenCase.dimension)).toEqual(
+      expect.arrayContaining([
+        "pricing",
+        "positioning",
+        "product_capabilities",
+        "policy"
+      ])
+    );
+    expect(goldenEntailmentCases.map((goldenCase) => goldenCase.riskType)).toEqual(
+      expect.arrayContaining([
+        "direct_support",
+        "partial_support",
+        "overstrong_claim",
+        "contradiction"
+      ])
+    );
+  });
+
+  it("summarizes deterministic calibration by label, dimension, and risk type", () => {
+    const summary = runEntailmentCalibration(goldenEntailmentCases);
+
+    expect(summary).toMatchObject({
+      totalCases: goldenEntailmentCases.length,
+      passedCases: goldenEntailmentCases.length,
+      failedCases: 0,
+      accuracy: 1
+    });
+    expect(summary.byLabel.entailed).toMatchObject({
+      totalCases: 2,
+      accuracy: 1
+    });
+    expect(summary.byLabel.partial).toMatchObject({
+      totalCases: 2,
+      accuracy: 1
+    });
+    expect(summary.byLabel.unsupported).toMatchObject({
+      totalCases: 2,
+      accuracy: 1
+    });
+    expect(summary.byLabel.contradicted).toMatchObject({
+      totalCases: 2,
+      accuracy: 1
+    });
+    expect(summary.byRiskType.overstrong_claim).toMatchObject({
+      totalCases: 2,
+      accuracy: 1
+    });
+    expect(summary.results[0]).toMatchObject({
+      id: expect.any(String),
+      expectedLabel: expect.any(String),
+      actualLabel: expect.any(String),
+      dimension: expect.any(String),
+      riskType: expect.any(String),
+      passed: true
+    });
+  });
+
+  it("reports empty calibration buckets as unmeasured instead of perfect", () => {
+    const summary = runEntailmentCalibration([
+      goldenEntailmentCases.find(
+        (goldenCase) => goldenCase.expectedLabel === "entailed"
+      ) ?? goldenEntailmentCases[0]!
+    ]);
+
+    expect(summary.byLabel.contradicted).toEqual({
+      totalCases: 0,
+      passedCases: 0,
+      failedCases: 0,
+      accuracy: null
     });
   });
 });

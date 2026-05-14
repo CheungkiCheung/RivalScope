@@ -2,9 +2,11 @@ import type { Claim, Fact, SourceChunk } from "@rivalscope/core";
 import type {
   ClaimEntailmentResult,
   EntailmentBenchmarkCase,
+  EntailmentCalibrationBucketSummary,
   EntailmentLabel,
   EvaluateClaimEntailmentInput
 } from "@rivalscope/evals";
+import type { EntailmentRiskType, GoldenEntailmentCase } from "@rivalscope/evals";
 import { evaluateClaimEntailment } from "@rivalscope/evals";
 import { z } from "zod";
 import {
@@ -37,6 +39,29 @@ export interface EntailmentJudgeComparisonSummary {
     labels: Record<string, EntailmentLabel>;
   }>;
   caseLabels: Array<{
+    caseId: string;
+    labels: Record<string, EntailmentLabel>;
+  }>;
+}
+
+export interface GoldenEntailmentJudgeCalibrationInput {
+  cases: GoldenEntailmentCase[];
+  judges: EntailmentJudge[];
+}
+
+export interface GoldenEntailmentJudgeCalibrationSummary {
+  totalCases: number;
+  judges: Array<{
+    name: string;
+    passedCases: number;
+    failedCases: number;
+    accuracy: number;
+    labelCounts: Record<EntailmentLabel, number>;
+    byLabel: Record<EntailmentLabel, EntailmentCalibrationBucketSummary>;
+    byDimension: Record<string, EntailmentCalibrationBucketSummary>;
+    byRiskType: Record<EntailmentRiskType, EntailmentCalibrationBucketSummary>;
+  }>;
+  disagreements: Array<{
     caseId: string;
     labels: Record<string, EntailmentLabel>;
   }>;
@@ -165,6 +190,106 @@ export async function compareEntailmentJudges(
         }
       ];
     })
+  };
+}
+
+export async function runGoldenEntailmentJudgeCalibration(
+  input: GoldenEntailmentJudgeCalibrationInput
+): Promise<GoldenEntailmentJudgeCalibrationSummary> {
+  const comparison = await compareEntailmentJudges({
+    cases: input.cases,
+    judges: input.judges
+  });
+  const caseById = new Map(input.cases.map((goldenCase) => [goldenCase.id, goldenCase]));
+
+  return {
+    totalCases: comparison.totalCases,
+    judges: comparison.judges.map((judgeSummary) => {
+      const judgeResults = comparison.caseLabels.map((caseLabel) => {
+        const goldenCase = caseById.get(caseLabel.caseId);
+        const actualLabel = caseLabel.labels[judgeSummary.name];
+
+        if (!goldenCase || !actualLabel) {
+          throw new Error(
+            `Missing golden calibration result for ${judgeSummary.name}/${caseLabel.caseId}`
+          );
+        }
+
+        return {
+          expectedLabel: goldenCase.expectedLabel,
+          actualLabel,
+          dimension: goldenCase.dimension,
+          riskType: goldenCase.riskType,
+          passed: actualLabel === goldenCase.expectedLabel
+        };
+      });
+
+      return {
+        ...judgeSummary,
+        byLabel: {
+          entailed: summarizeJudgeCalibrationBucket(
+            judgeResults.filter((result) => result.expectedLabel === "entailed")
+          ),
+          partial: summarizeJudgeCalibrationBucket(
+            judgeResults.filter((result) => result.expectedLabel === "partial")
+          ),
+          unsupported: summarizeJudgeCalibrationBucket(
+            judgeResults.filter((result) => result.expectedLabel === "unsupported")
+          ),
+          contradicted: summarizeJudgeCalibrationBucket(
+            judgeResults.filter((result) => result.expectedLabel === "contradicted")
+          )
+        },
+        byDimension: summarizeJudgeCalibrationByKey(
+          judgeResults,
+          (result) => result.dimension
+        ),
+        byRiskType: {
+          direct_support: summarizeJudgeCalibrationBucket(
+            judgeResults.filter((result) => result.riskType === "direct_support")
+          ),
+          partial_support: summarizeJudgeCalibrationBucket(
+            judgeResults.filter((result) => result.riskType === "partial_support")
+          ),
+          overstrong_claim: summarizeJudgeCalibrationBucket(
+            judgeResults.filter((result) => result.riskType === "overstrong_claim")
+          ),
+          contradiction: summarizeJudgeCalibrationBucket(
+            judgeResults.filter((result) => result.riskType === "contradiction")
+          )
+        }
+      };
+    }),
+    disagreements: comparison.disagreements
+  };
+}
+
+function summarizeJudgeCalibrationByKey<T extends { passed: boolean }>(
+  results: Array<T>,
+  getKey: (result: T) => string
+): Record<string, EntailmentCalibrationBucketSummary> {
+  const keys = [...new Set(results.map(getKey))];
+
+  return Object.fromEntries(
+    keys.map((key) => [
+      key,
+      summarizeJudgeCalibrationBucket(
+        results.filter((result) => getKey(result) === key)
+      )
+    ])
+  );
+}
+
+function summarizeJudgeCalibrationBucket<T extends { passed: boolean }>(
+  results: Array<T>
+): EntailmentCalibrationBucketSummary {
+  const passedCases = results.filter((result) => result.passed).length;
+
+  return {
+    totalCases: results.length,
+    passedCases,
+    failedCases: results.length - passedCases,
+    accuracy: results.length === 0 ? null : passedCases / results.length
   };
 }
 

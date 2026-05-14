@@ -53,7 +53,7 @@ The repository currently contains a complete MVP path:
 - Real source-tooling contracts for fixture/Tavily search, URL fetch, HTML-to-text extraction, and stable text chunking.
 - Provider-neutral model gateway with deterministic mock mode, OpenAI-compatible HTTP mode, Zod-validated structured outputs for Extract and Analyst agents, and first-class model-call tracing.
 - Report section validation that rejects unknown claim references before report artifacts enter the workflow.
-- Offline trajectory evals for evidence coverage, citation validity, required-dimension coverage, golden-case regression summaries, and project-page trajectory scoring.
+- Offline trajectory and entailment calibration evals for evidence coverage, citation validity, required-dimension coverage, golden-case regression summaries, lexical over-strong-qualifier guardrails, contradiction checks, and project-page trajectory scoring.
 - Source collection persistence through the same Workflow, AgentRun, and ToolCall observability records used by analysis runs.
 - PostgreSQL persistence through Prisma repositories.
 - Next.js web UI for project creation, source preview, DAG execution, report review, evidence inspection, workflow status, tool-call observability, and model-call observability.
@@ -83,6 +83,7 @@ packages/
   evals/
     fixtures/golden-trajectories.json # Offline positive/negative golden cases
     src/trajectory-eval.ts # Offline evidence trajectory scoring
+    src/entailment.ts      # Entailment labels, calibration cases, and bucketed summaries
     src/golden-runner.ts   # Golden-case summary and pass/fail logic
   tools/
     src/index.ts         # Placeholder for concrete external tools
@@ -128,13 +129,13 @@ Run type checks:
 npm run typecheck
 ```
 
-Run offline golden trajectory evals:
+Run offline golden trajectory and entailment calibration evals:
 
 ```bash
 npm run eval:golden
 ```
 
-The golden suite intentionally includes both a healthy trajectory and a broken trajectory. The broken case is expected to produce unsupported-claim, unknown-fact, and missing-dimension findings, so the eval command verifies both positive scoring and negative guardrail behavior without any network or model calls.
+The golden suite intentionally includes both a healthy trajectory and a broken trajectory. The broken case is expected to produce unsupported-claim, unknown-fact, and missing-dimension findings. The same command also runs entailment calibration cases across `entailed`, `partial`, `unsupported`, and `contradicted` labels, including direct support, partial support, lexical over-strong qualifiers, and contradiction risks, without any network or model calls.
 
 Validate the Prisma schema:
 

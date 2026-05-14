@@ -626,6 +626,20 @@ Purpose:
 
 Current limitation: the comparison currently evaluates claims from the existing extracted evidence and uses deterministic labels as the live baseline, not human-calibrated accuracy. The next quality step is to expand the golden entailment fixture set and use it as the calibration dataset before enabling model judge decisions in production repair routing.
 
+## Current Phase 4.3: Entailment Calibration Suite
+
+Status: implemented for offline deterministic calibration and judge calibration APIs.
+
+Purpose:
+
+- Add `goldenEntailmentCases` covering `entailed`, `partial`, `unsupported`, and `contradicted` labels.
+- Cover competition-relevant risk types: direct support, partial support, lexical over-strong qualifiers, and contradictions.
+- Aggregate calibration by label, dimension, and risk type so future model judges can be evaluated objectively.
+- Extend `npm run eval:golden` to output both trajectory evals and entailment calibration.
+- Improve deterministic entailment handling for unsupported lexical over-strong qualifiers and subject-overlap-checked reverse support contradictions.
+
+Current limitation: the golden suite is still small and deterministic-first. The next quality step is to add more domain-specific cases, then run the optional Mimo judge against the same suite and track where it beats or loses to deterministic entailment.
+
 ## Per-Module Work Rule
 
 Every metric or module should ship with:

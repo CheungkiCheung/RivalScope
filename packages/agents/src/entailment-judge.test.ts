@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { MockModelClient } from "./model-client";
+import { goldenEntailmentCases } from "@rivalscope/evals";
 import {
   compareEntailmentJudges,
   createDeterministicEntailmentJudge,
-  createModelEntailmentJudge
+  createModelEntailmentJudge,
+  runGoldenEntailmentJudgeCalibration
 } from "./entailment-judge";
 
 const claim = {
@@ -84,6 +86,67 @@ describe("createModelEntailmentJudge", () => {
       missingTokens: ["guarantees", "cheapest"],
       contradictions: [],
       reasons: ["Evidence does not establish cheapest pricing."]
+    });
+  });
+
+  it("calibrates judges against the golden entailment suite with metadata buckets", async () => {
+    const calibration = await runGoldenEntailmentJudgeCalibration({
+      cases: goldenEntailmentCases,
+      judges: [createDeterministicEntailmentJudge()]
+    });
+
+    expect(calibration).toMatchObject({
+      totalCases: goldenEntailmentCases.length,
+      judges: [
+        {
+          name: "deterministic",
+          passedCases: goldenEntailmentCases.length,
+          failedCases: 0,
+          accuracy: 1,
+          byLabel: {
+            entailed: {
+              accuracy: 1
+            },
+            partial: {
+              accuracy: 1
+            },
+            unsupported: {
+              accuracy: 1
+            },
+            contradicted: {
+              accuracy: 1
+            }
+          },
+          byRiskType: {
+            overstrong_claim: {
+              accuracy: 1
+            }
+          }
+        }
+      ],
+      disagreements: []
+    });
+  });
+
+  it("reports empty judge calibration buckets as unmeasured", async () => {
+    const entailedCase = goldenEntailmentCases.find(
+      (goldenCase) => goldenCase.expectedLabel === "entailed"
+    );
+
+    if (!entailedCase) {
+      throw new Error("Expected at least one entailed golden case");
+    }
+
+    const calibration = await runGoldenEntailmentJudgeCalibration({
+      cases: [entailedCase],
+      judges: [createDeterministicEntailmentJudge()]
+    });
+
+    expect(calibration.judges[0]?.byLabel.contradicted).toEqual({
+      totalCases: 0,
+      passedCases: 0,
+      failedCases: 0,
+      accuracy: null
     });
   });
 });
