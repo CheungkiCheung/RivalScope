@@ -36,6 +36,19 @@ describe("model client env", () => {
     expect(options.model?.name).toBe("openai-compatible");
   });
 
+  test("enables Mimo as an OpenAI-compatible model provider", () => {
+    const options = createAnalysisAgentOptionsFromEnv({
+      RIVALSCOPE_ANALYSIS_AGENT_MODE: "model",
+      RIVALSCOPE_MODEL_PROVIDER: "mimo",
+      MIMO_API_KEY: "test-key"
+    });
+
+    expect(options.model).toMatchObject({
+      name: "mimo",
+      model: "mimo-v2-pro"
+    });
+  });
+
   test("rejects unknown analysis modes instead of silently changing execution mode", () => {
     expect(() =>
       createAnalysisAgentOptionsFromEnv({
@@ -49,8 +62,6 @@ describe("model client env", () => {
       createAnalysisAgentOptionsFromEnv({
         RIVALSCOPE_ANALYSIS_AGENT_MODE: "model"
       })
-    ).toThrow(
-      "RIVALSCOPE_MODEL_PROVIDER must be openai-compatible when RIVALSCOPE_ANALYSIS_AGENT_MODE is model"
-    );
+    ).toThrow("RIVALSCOPE_MODEL_PROVIDER must be openai-compatible or mimo");
   });
 });

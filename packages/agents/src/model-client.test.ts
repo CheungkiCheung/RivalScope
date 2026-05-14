@@ -225,6 +225,52 @@ describe("model client", () => {
     });
   });
 
+  it("creates a Mimo request with api-key authentication", async () => {
+    const requests: Array<{ url: string; init: RequestInit }> = [];
+    const model = createModelClientFromEnv(
+      {
+        RIVALSCOPE_MODEL_PROVIDER: "mimo",
+        MIMO_API_KEY: "test-mimo-key"
+      },
+      async (url, init) => {
+        requests.push({ url: String(url), init: init ?? {} });
+
+        return new Response(
+          JSON.stringify({
+            choices: [
+              {
+                message: {
+                  content: JSON.stringify({ label: "entailed" })
+                }
+              }
+            ]
+          }),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" }
+          }
+        );
+      }
+    );
+
+    await model.generate({
+      task: "entailment_judge",
+      system: "Return JSON only.",
+      messages: [{ role: "user", content: "claim and evidence" }],
+      responseFormat: "json_object"
+    });
+
+    expect(model).toMatchObject({
+      name: "mimo",
+      model: "mimo-v2-pro"
+    });
+    expect(requests[0]?.url).toBe("https://api.xiaomimimo.com/v1/chat/completions");
+    expect(requests[0]?.init.headers).toEqual({
+      "api-key": "test-mimo-key",
+      "content-type": "application/json"
+    });
+  });
+
   it("keeps mock as the default provider and requires a key for real providers", () => {
     expect(createModelClientFromEnv({}).name).toBe("mock");
     expect(() =>

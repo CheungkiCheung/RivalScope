@@ -191,7 +191,9 @@ export async function generateStructuredObject<T, R = T>(
 export interface OpenAICompatibleModelClientOptions {
   apiKey: string;
   model: string;
+  name?: string;
   baseUrl?: string;
+  authHeader?: "authorization_bearer" | "api_key";
   timeoutMs?: number;
   fetchImplementation?: typeof fetch;
 }
@@ -217,7 +219,7 @@ export function createOpenAICompatibleModelClient(
   const timeoutMs = options.timeoutMs ?? 30_000;
 
   return {
-    name: "openai-compatible",
+    name: options.name ?? "openai-compatible",
     model: options.model,
     generate: async (input) => {
       const response = await fetchWithTimeout({
@@ -227,7 +229,10 @@ export function createOpenAICompatibleModelClient(
         init: {
           method: "POST",
           headers: {
-            authorization: `Bearer ${options.apiKey}`,
+            ...buildAuthHeaders({
+              apiKey: options.apiKey,
+              authHeader: options.authHeader ?? "authorization_bearer"
+            }),
             "content-type": "application/json"
           },
           body: JSON.stringify({
@@ -362,6 +367,9 @@ export interface ModelProviderEnv {
   OPENAI_COMPATIBLE_API_KEY?: string;
   OPENAI_COMPATIBLE_MODEL?: string;
   OPENAI_COMPATIBLE_BASE_URL?: string;
+  MIMO_API_KEY?: string;
+  MIMO_MODEL?: string;
+  MIMO_BASE_URL?: string;
 }
 
 export function createModelClientFromEnv(
@@ -393,5 +401,37 @@ export function createModelClientFromEnv(
     });
   }
 
+  if (provider === "mimo") {
+    const apiKey = env.MIMO_API_KEY?.trim() || env.OPENAI_COMPATIBLE_API_KEY?.trim();
+
+    if (!apiKey) {
+      throw new Error("MIMO_API_KEY is required when using Mimo models");
+    }
+
+    return createOpenAICompatibleModelClient({
+      name: "mimo",
+      apiKey,
+      model: env.MIMO_MODEL?.trim() || "mimo-v2-pro",
+      baseUrl: env.MIMO_BASE_URL?.trim() || "https://api.xiaomimimo.com/v1",
+      authHeader: "api_key",
+      ...(fetchImplementation ? { fetchImplementation } : {})
+    });
+  }
+
   throw new Error(`Unsupported model provider ${provider}`);
+}
+
+function buildAuthHeaders(input: {
+  apiKey: string;
+  authHeader: "authorization_bearer" | "api_key";
+}): Record<string, string> {
+  if (input.authHeader === "api_key") {
+    return {
+      "api-key": input.apiKey
+    };
+  }
+
+  return {
+    authorization: `Bearer ${input.apiKey}`
+  };
 }

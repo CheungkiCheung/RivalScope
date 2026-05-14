@@ -40,7 +40,7 @@ The immediate next milestone after Phase 3 is:
 Semantic Evidence Sufficiency + Source-Quality-Aware Repair
 ```
 
-Current status: implemented for deterministic trust scoring, repair planning, persisted before/after trust snapshots, a seeded repair-lift demo path, and a standalone entailment eval harness. Claim Trust now includes lexical `semanticSupport` and source `sourceAuthority` metrics; Repair Planner can use weak semantic-support penalties to remove unsupported-but-cited claims; `claim_trust_snapshot` artifacts preserve draft/final trust deltas; `[demo:repair_lift]` projects prove the lift repeatably; entailment benchmarks expose label accuracy for future LLM/NLI judges.
+Current status: implemented for deterministic trust scoring, repair planning, persisted before/after trust snapshots, a seeded repair-lift demo path, a standalone entailment eval harness, and an optional Mimo-backed entailment judge. Claim Trust now includes lexical `semanticSupport` and source `sourceAuthority` metrics; Repair Planner can use weak semantic-support penalties to remove unsupported-but-cited claims; `claim_trust_snapshot` artifacts preserve draft/final trust deltas; `[demo:repair_lift]` projects prove the lift repeatably; entailment benchmarks expose label accuracy and judge disagreement for future LLM/NLI optimization.
 
 ## Research Summary
 
@@ -231,7 +231,8 @@ Current implementation notes:
 - Done: persist before/after Claim Trust snapshots as generic artifacts and show trust delta in Repair Loop.
 - Done: add a seeded repair-lift fixture where a weak draft claim is removed and the final trust delta is positive in a repeatable end-to-end run.
 - Done: add a standalone deterministic entailment harness with `entailed`, `partial`, `unsupported`, and `contradicted` labels plus benchmark accuracy.
-- Remaining work after this milestone: add an optional LLM/NLI-backed entailment evaluator behind the same interface and compare it against deterministic lexical support on golden fixtures.
+- Done: add an optional Mimo-backed model entailment judge behind the same interface and compare it against deterministic lexical support on golden fixtures.
+- Remaining work after this milestone: expand golden entailment fixtures and surface deterministic/model judge disagreements in the project UI.
 
 ## Stage 1: Real Source Tooling
 

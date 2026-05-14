@@ -588,6 +588,19 @@ Purpose:
 
 Current limitation: the evaluator is still deterministic and lexical. The next step is to add an optional LLM/NLI-backed judge behind the same interface and compare both judges on golden entailment fixtures.
 
+## Current Phase 4.1: Mimo Entailment Judge
+
+Status: implemented for optional model-backed judging.
+
+Purpose:
+
+- Add `mimo` as an environment-configured model provider using OpenAI-compatible chat completions with `api-key` authentication.
+- Add a `ModelEntailmentJudge` adapter that asks an LLM for strict JSON entailment labels.
+- Add a judge comparison runner so deterministic and model judges can be compared on the same golden cases.
+- Keep deterministic/offline execution as the default so tests and demos do not require API credentials.
+
+Current limitation: model judge quality still needs a larger golden entailment fixture set and disagreement UI. The provider is available, but production workflows should only enable it after fixture accuracy and cost are tracked.
+
 ## Per-Module Work Rule
 
 Every metric or module should ship with:

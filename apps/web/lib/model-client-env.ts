@@ -17,9 +17,11 @@ export function createAnalysisAgentOptionsFromEnv(
     throw new Error(`Unsupported analysis agent mode ${mode}`);
   }
 
-  if (env.RIVALSCOPE_MODEL_PROVIDER?.trim().toLowerCase() !== "openai-compatible") {
+  const provider = env.RIVALSCOPE_MODEL_PROVIDER?.trim().toLowerCase();
+
+  if (provider !== "openai-compatible" && provider !== "mimo") {
     throw new Error(
-      "RIVALSCOPE_MODEL_PROVIDER must be openai-compatible when RIVALSCOPE_ANALYSIS_AGENT_MODE is model"
+      "RIVALSCOPE_MODEL_PROVIDER must be openai-compatible or mimo when RIVALSCOPE_ANALYSIS_AGENT_MODE is model"
     );
   }
 
@@ -43,6 +45,11 @@ export function createConfiguredModelClient(
       : {}),
     ...(env.OPENAI_COMPATIBLE_BASE_URL
       ? { OPENAI_COMPATIBLE_BASE_URL: env.OPENAI_COMPATIBLE_BASE_URL }
+      : {}),
+    ...(env.MIMO_API_KEY ? { MIMO_API_KEY: env.MIMO_API_KEY } : {}),
+    ...(env.MIMO_MODEL ? { MIMO_MODEL: env.MIMO_MODEL } : {}),
+    ...(env.MIMO_BASE_URL
+      ? { MIMO_BASE_URL: env.MIMO_BASE_URL }
       : {})
   });
 }

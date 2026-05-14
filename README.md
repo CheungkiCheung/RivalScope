@@ -185,6 +185,16 @@ OPENAI_COMPATIBLE_MODEL="gpt-4o-mini"
 OPENAI_COMPATIBLE_BASE_URL="https://api.openai.com/v1"
 ```
 
+Mimo can be used through the same model gateway without changing workflow code:
+
+```bash
+RIVALSCOPE_ANALYSIS_AGENT_MODE="model"
+RIVALSCOPE_MODEL_PROVIDER="mimo"
+MIMO_API_KEY="..."
+MIMO_MODEL="mimo-v2-pro"
+MIMO_BASE_URL="https://api.xiaomimimo.com/v1"
+```
+
 The model gateway is intentionally OpenAI-compatible rather than SDK-specific. This keeps tests offline while leaving room to connect OpenAI, Volcano Ark, or any compatible endpoint through environment variables. Model-backed Extract and Analyst agents still validate structured output locally: the system assigns fact and claim IDs, rejects model references to unknown chunks or facts, and rejects generated facts assigned to competitors outside the project allowlist before artifacts enter the evidence chain. Each model task is recorded as a model call trace with provider, task, status, bounded prompt trace input, bounded output, token usage when available, and validation/provider errors.
 
 The MVP flow is:

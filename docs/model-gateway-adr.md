@@ -13,7 +13,7 @@ ByteDance's competitor-analysis challenge rewards end-to-end agent engineering, 
 - Structured outputs that are validated before entering the evidence chain.
 - Observable failures when a model returns invalid JSON or schema-invalid content.
 
-OpenAI-compatible HTTP is the first real adapter because it is simple, widely supported, and can map to OpenAI or compatible enterprise endpoints through `OPENAI_COMPATIBLE_BASE_URL`. The business workflow only sees `ModelClient`, so future adapters can be added without changing Extract, Analyst, or DAG code.
+OpenAI-compatible HTTP is the first real adapter because it is simple, widely supported, and can map to OpenAI or compatible enterprise endpoints through `OPENAI_COMPATIBLE_BASE_URL`. Mimo is supported as a named provider through the same adapter with `api-key` authentication and `MIMO_*` environment variables. The business workflow only sees `ModelClient`, so future adapters can be added without changing Extract, Analyst, entailment judging, or DAG code.
 
 ## Current Scope
 
