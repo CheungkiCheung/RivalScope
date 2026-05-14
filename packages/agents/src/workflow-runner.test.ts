@@ -1125,6 +1125,137 @@ describe("analyst agent", () => {
       ]
     });
   });
+
+  it("rejects single-competitor model claims that mix facts across competitors", async () => {
+    const analyst = createAnalystAgent({
+      model: new MockModelClient([
+        {
+          content: JSON.stringify({
+            claims: [
+              {
+                dimension: "pricing",
+                statement: "Cursor and Codex both monetize through paid plans.",
+                factIds: ["fact_1", "fact_2"],
+                confidence: 0.8,
+                kind: "single_competitor"
+              }
+            ]
+          })
+        }
+      ])
+    });
+    const execution = runAgent(analyst, {
+      projectId: "project_1",
+      artifacts: [
+        createFactsArtifact([
+          {
+            id: "fact_1",
+            competitorId: "Cursor",
+            dimension: "pricing"
+          },
+          {
+            id: "fact_2",
+            competitorId: "Codex",
+            dimension: "pricing"
+          }
+        ])
+      ]
+    });
+
+    await expect(execution).rejects.toThrow(
+      "Model claim claim_1 is single_competitor but cites facts from multiple competitors"
+    );
+  });
+
+  it("allows comparative model claims across competitors when cited facts share the claim dimension", async () => {
+    const analyst = createAnalystAgent({
+      model: new MockModelClient([
+        {
+          content: JSON.stringify({
+            claims: [
+              {
+                dimension: "pricing",
+                statement: "Cursor and Codex both have pricing evidence.",
+                factIds: ["fact_1", "fact_2"],
+                confidence: 0.8,
+                kind: "comparative"
+              }
+            ]
+          })
+        }
+      ])
+    });
+
+    const result = await runAgent(analyst, {
+      projectId: "project_1",
+      artifacts: [
+        createFactsArtifact([
+          {
+            id: "fact_1",
+            competitorId: "Cursor",
+            dimension: "pricing"
+          },
+          {
+            id: "fact_2",
+            competitorId: "Codex",
+            dimension: "pricing"
+          }
+        ])
+      ]
+    });
+
+    expect(result.output.value).toMatchObject({
+      claims: [
+        {
+          id: "claim_1",
+          kind: "comparative",
+          dimension: "pricing",
+          factIds: ["fact_1", "fact_2"]
+        }
+      ]
+    });
+  });
+
+  it("rejects model claims whose cited fact dimensions do not match the claim dimension", async () => {
+    const analyst = createAnalystAgent({
+      model: new MockModelClient([
+        {
+          content: JSON.stringify({
+            claims: [
+              {
+                dimension: "pricing",
+                statement: "Cursor pricing and developer workflow are both differentiated.",
+                factIds: ["fact_1", "fact_2"],
+                confidence: 0.8,
+                kind: "comparative"
+              }
+            ]
+          })
+        }
+      ])
+    });
+    const execution = runAgent(analyst, {
+      projectId: "project_1",
+      artifacts: [
+        createFactsArtifact([
+          {
+            id: "fact_1",
+            competitorId: "Cursor",
+            dimension: "pricing"
+          },
+          {
+            id: "fact_2",
+            competitorId: "Cursor",
+            dimension: "developer_experience"
+          }
+        ])
+      ]
+    });
+
+    await expect(execution).rejects.toThrow(
+      "Model claim claim_1 dimension pricing does not match cited fact fact_2 dimension developer_experience"
+    );
+  });
 });
 
 describe("critic agent", () => {
@@ -2293,23 +2424,41 @@ function createSourcesArtifact(
   };
 }
 
-function createFactsArtifact() {
+function createFactsArtifact(
+  overrides: Array<{
+    id: string;
+    competitorId: string;
+    dimension: string;
+    statement?: string;
+    sourceChunkIds?: string[];
+    confidence?: number;
+  }> = [
+    {
+      id: "fact_1",
+      competitorId: "Cursor",
+      dimension: "pricing",
+      statement: "Cursor offers paid plans.",
+      sourceChunkIds: ["chunk_1"],
+      confidence: 0.91
+    }
+  ]
+) {
   return {
     id: "artifact_facts",
     kind: "facts" as const,
     createdAt: "2026-05-11T00:00:00.000Z",
     value: {
-      facts: [
-        {
-          id: "fact_1",
+      facts: overrides.map((fact) => ({
+        id: fact.id,
           projectId: "project_1",
-          competitorId: "Cursor",
-          dimension: "pricing",
-          statement: "Cursor offers paid plans.",
-          sourceChunkIds: ["chunk_1"],
-          confidence: 0.91
-        }
-      ]
+        competitorId: fact.competitorId,
+        dimension: fact.dimension,
+        statement:
+          fact.statement ??
+          `${fact.competitorId} has evidence for ${fact.dimension}.`,
+        sourceChunkIds: fact.sourceChunkIds ?? ["chunk_1"],
+        confidence: fact.confidence ?? 0.91
+      }))
     }
   };
 }

@@ -121,6 +121,8 @@
   - Added explicit `invalid_claim_citations` evidence gaps and partial branch status when facts exist but the branch claim is not publication-safe.
   - Added TDD coverage for source collection by competitor × dimension, with URL dedupe.
   - Updated source ingestion so each competitor/dimension pair gets its own search request and duplicate URLs are skipped before fetch/chunk persistence.
+  - Added TDD coverage proving model-synthesized claims cannot mix dimensions or misuse `single_competitor` when citing facts from multiple competitors.
+  - Updated Analyst normalization so model claims are rejected when cited fact dimensions do not match the claim dimension, while valid same-dimension comparative claims remain allowed.
 
 ## Test Results
 | Test | Expected | Actual | Status |
@@ -153,6 +155,9 @@
 | Focused source ingestion hardening | Per-dimension search and URL dedupe work | `apps/web/lib/source-ingestion.test.ts` passed | pass |
 | Related core tests after hardening | Source tooling, seed demo, source persistence, workflow runner pass | 5 focused suites / 52 tests passed | pass |
 | Typecheck after core hardening | TypeScript strict checks pass | `npm run typecheck` passed | pass |
+| RED tests for model claim schema hardening | Analyst accepts mixed-competitor single claim and mixed-dimension claim | Failed because model claims were accepted before validation | pass |
+| Focused analyst hardening tests | Invalid model claims rejected; valid comparative claim allowed | `packages/agents/src/workflow-runner.test.ts -t "analyst agent"` passed | pass |
+| Workflow runner after claim hardening | Full agent workflow suite passes | `packages/agents/src/workflow-runner.test.ts` passed, 36 tests | pass |
 
 ## Error Log
 | Timestamp | Error | Attempt | Resolution |

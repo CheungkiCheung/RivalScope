@@ -862,14 +862,35 @@ function normalizeModelClaims(input: {
   facts: Fact[];
   claims: ModelClaimCandidate[];
 }): Claim[] {
-  const factIds = new Set(input.facts.map((fact) => fact.id));
+  const factById = new Map(input.facts.map((fact) => [fact.id, fact]));
 
   return input.claims.map((claim, index) => {
     const id = `claim_${index + 1}`;
+    const citedFacts: Fact[] = [];
 
     for (const factId of claim.factIds) {
-      if (!factIds.has(factId)) {
+      const fact = factById.get(factId);
+
+      if (!fact) {
         throw new Error(`Model claim ${id} cites unknown fact ${factId}`);
+      }
+
+      if (fact.dimension !== claim.dimension) {
+        throw new Error(
+          `Model claim ${id} dimension ${claim.dimension} does not match cited fact ${fact.id} dimension ${fact.dimension}`
+        );
+      }
+
+      citedFacts.push(fact);
+    }
+
+    if (claim.kind === "single_competitor") {
+      const competitorIds = unique(citedFacts.map((fact) => fact.competitorId));
+
+      if (competitorIds.length > 1) {
+        throw new Error(
+          `Model claim ${id} is single_competitor but cites facts from multiple competitors`
+        );
       }
     }
 
