@@ -536,8 +536,8 @@ Goal: turn the system into a competition-ready product.
 
 Required deliverables:
 
-- Markdown and JSON report export.
-- Evidence appendix.
+- Done for first slice: Markdown and JSON report export.
+- Done for first slice: Evidence appendix.
 - Stable seeded demo project.
 - Deployment.
 - Demo script.
@@ -800,4 +800,4 @@ The next implementation milestone is Phase 6:
 Delivery And Demo Hardening
 ```
 
-Current sub-slice: routed research synthesis policy now gates Writer Agent claim inclusion. Continue by making evidence appendix entries line up across Research Branches, Claim Trust Graph, Repair Loop, and exported report.
+Current sub-slice: routed research synthesis policy gates Writer Agent claim inclusion, and Markdown/JSON exports now include an evidence appendix. Continue with a stable seeded demo script, deployment verification, and README/interview narrative.

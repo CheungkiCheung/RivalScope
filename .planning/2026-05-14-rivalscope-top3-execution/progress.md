@@ -90,6 +90,16 @@
   - Added report-level synthesis summary with included claim ids, excluded claim ids, and evidence gap ids.
   - Added Report UI pills for synthesis included/excluded counts.
 
+### Phase 6.2: Evidence Appendix Export
+- **Status:** in progress
+- **Started:** 2026-05-15 00:16 CST
+- Actions taken:
+  - Added `buildReportExport` for deterministic JSON and Markdown exports.
+  - Added evidence appendix rows from Claim Trust nodes, including claim, fact, source chunk, source, trust score, and risk level.
+  - Added export response helper with stable markdown/json attachment filenames.
+  - Added project export route at `/projects/[projectId]/export?format=markdown|json`.
+  - Added project-page `Export MD` and `Export JSON` actions.
+
 ## Test Results
 | Test | Expected | Actual | Status |
 |------|----------|--------|--------|
@@ -107,6 +117,8 @@
 | Typecheck after routed research | TypeScript strict checks pass | `npm run typecheck` passed | pass |
 | RED test for synthesis-gated writing | Writer includes excluded claim before implementation | Failed with excluded claim still present in report body and claimIds | pass |
 | Focused synthesis-gated writing tests | Writer filters report by synthesis included ids | `workflow-runner` and `project-research-summary` focused suites passed | pass |
+| RED tests for report export | Export modules do not exist before implementation | Failed on missing `report-export` and `report-export-route` modules | pass |
+| Focused report export tests | JSON/Markdown export and attachment responses are generated | `report-export` and `report-export-route` focused suites passed | pass |
 
 ## Error Log
 | Timestamp | Error | Attempt | Resolution |

@@ -102,6 +102,20 @@ export default async function ProjectPage({ params }: ProjectPageProps) {
             Run Agent DAG
           </button>
         </form>
+        <div className="button-row">
+          <Link
+            className="button secondary"
+            href={`/projects/${projectId}/export?format=markdown`}
+          >
+            Export MD
+          </Link>
+          <Link
+            className="button secondary"
+            href={`/projects/${projectId}/export?format=json`}
+          >
+            Export JSON
+          </Link>
+        </div>
       </div>
 
       <section className="metrics">

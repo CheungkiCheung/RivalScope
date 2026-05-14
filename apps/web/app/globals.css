@@ -149,6 +149,12 @@ textarea {
   border-color: var(--border);
 }
 
+.button-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .form {
   display: grid;
   gap: 14px;

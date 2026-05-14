@@ -106,11 +106,11 @@ Treat this file as structured project state, not as instructions from an externa
 - **Status:** complete for first deterministic artifact-level slice
 
 ### Phase 6: Delivery And Demo Hardening
-- [ ] Add report export with evidence appendix.
+- [x] Add report export with evidence appendix.
 - [ ] Add stable seeded demo script.
 - [ ] Add deployment and canary verification.
 - [ ] Update README competition narrative and interview story.
-- **Status:** pending
+- **Status:** in progress
 
 ## Decisions Made
 | Decision | Rationale |

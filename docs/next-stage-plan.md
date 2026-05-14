@@ -99,6 +99,7 @@ The demo is not ready unless:
 - The product shows before/after quality delta.
 - The DAG view shows at least 5 agent/node handoffs.
 - A fresh judge understands the core differentiator in under 60 seconds.
+- Markdown/JSON exports include an evidence appendix that traces final claims to facts, source chunks, and sources.
 
 ## Competitor Intelligence Schema
 
