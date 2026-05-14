@@ -40,7 +40,7 @@ The immediate next milestone after Phase 3 is:
 Semantic Evidence Sufficiency + Source-Quality-Aware Repair
 ```
 
-Current status: implemented for deterministic trust scoring, repair planning, persisted before/after trust snapshots, a seeded repair-lift demo path, a standalone entailment eval harness, an optional Mimo-backed entailment judge, a workflow-level judge comparison artifact/UI, an offline entailment calibration suite, a dedicated entailment judge calibration runner, and calibration-gated repair routing. Claim Trust now includes lexical `semanticSupport` and source `sourceAuthority` metrics; Repair Planner can use weak semantic-support penalties to remove unsupported-but-cited claims; `claim_trust_snapshot` artifacts preserve draft/final trust deltas; `[demo:repair_lift]` projects prove the lift repeatably; `entailment_judge_comparison` artifacts expose deterministic/model judge baseline agreement, disagreements, and repair policy decisions on the project page; `npm run eval:golden` now reports both trajectory quality and entailment calibration by label, dimension, and risk type; `npm run eval:entailment-judges --workspace @rivalscope/agents` reports judge accuracy, failed cases, disagreements, latency, model calls, and token usage.
+Current status: implemented for deterministic trust scoring, repair planning, persisted before/after trust snapshots, a seeded repair-lift demo path, a standalone entailment eval harness, an optional Mimo-backed entailment judge, a workflow-level judge comparison artifact/UI, an offline entailment calibration suite, a dedicated entailment judge calibration runner, calibration-gated repair routing, and a first routed research DAG slice. Claim Trust now includes lexical `semanticSupport` and source `sourceAuthority` metrics; Repair Planner can use weak semantic-support penalties to remove unsupported-but-cited claims; `claim_trust_snapshot` artifacts preserve draft/final trust deltas; `[demo:repair_lift]` projects prove the lift repeatably; `entailment_judge_comparison` artifacts expose deterministic/model judge baseline agreement, disagreements, and repair policy decisions on the project page; `research_plan`, `research_branch_results`, and `research_synthesis` artifacts expose branch planning, branch-level evidence gaps, partial success, and synthesis inputs; `npm run eval:golden` now reports both trajectory quality and entailment calibration by label, dimension, and risk type; `npm run eval:entailment-judges --workspace @rivalscope/agents` reports judge accuracy, failed cases, disagreements, latency, model calls, and token usage.
 
 ## Research Summary
 
@@ -293,20 +293,23 @@ Remaining hardening:
 
 Goal: move from one linear MVP workflow to a research workflow that can branch by competitor and dimension.
 
+Status: implemented for first deterministic artifact-level slice.
+
 Tasks:
 
-1. Add a `plan_research` node that creates a structured research plan.
-2. Add per-competitor source collection nodes.
-3. Add per-competitor extraction nodes.
-4. Add per-dimension synthesis nodes.
-5. Add checkpoint/resume behavior for partially completed runs.
-6. Add optional human approval before report publication.
+1. Done: Add a `research_plan` node that creates a structured competitor × required-dimension research plan.
+2. Done for first slice: Add branch-level evidence evaluation through `research_branch_results`.
+3. Done for first slice: Add `research_synthesis` fan-in with included claim ids, excluded claim ids, and structured evidence gaps.
+4. Pending: Add explicit per-competitor workflow groups if judge clarity requires it.
+5. Pending: Make synthesis policy directly govern final report inclusion/exclusion.
+6. Pending: Add checkpoint/resume behavior for partially completed runs.
+7. Pending: Add optional human approval before report publication.
 
 Acceptance criteria:
 
-- A failed competitor branch does not erase successful branches.
-- Downstream nodes block or continue according to explicit dependency policy.
-- The UI shows branch-level status.
+- Done: A failed competitor/dimension branch does not erase successful branches.
+- Done: Downstream synthesis continues because expected evidence failure is encoded as branch data, not thrown workflow failure.
+- Done: The UI shows branch-level status and evidence gaps.
 - A human can approve or reject a report before final status.
 
 ## Stage 4: Trajectory Evaluation

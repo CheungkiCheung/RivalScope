@@ -362,20 +362,34 @@ This is a top-3 signal: RivalScope does not blindly trust the LLM judge. It trea
 
 ### 6. Routed Research DAG
 
-The workflow should become branch-aware:
+Status: implemented for the first deterministic artifact-level slice.
+
+The workflow is now branch-aware at the artifact and synthesis-policy level:
 
 ```text
-collect_sources
--> extract_by_competitor
--> analyze_by_dimension
--> synthesize_claims
--> write_report
--> adversarial_review
+research_plan
+-> extract
+-> analyze
+-> research_branches
+-> research_synthesis
+-> write
+-> critique
+-> judge_compare
 -> repair
+-> apply_repair
 -> final_eval
+-> trust_snapshot
 ```
 
-Branch status and branch-level evidence gaps should be visible.
+The first implementation creates:
+
+- `research_plan`: deterministic competitor × required-dimension branch matrix.
+- `research_branch_results`: branch-level `succeeded`, `partial`, or `failed` evidence gates.
+- `research_synthesis`: fan-in artifact that preserves successful branch claim ids and structured evidence gaps from weak or missing branches.
+
+Expected evidence insufficiency is encoded as branch-result data rather than thrown workflow failure. This keeps synthesis alive while still making the gap visible. The project page now shows Research Branches metrics, branch rows, and evidence-gap details.
+
+Current limitation: Phase 5 does not yet create dynamic per-branch workflow nodes, and synthesis does not yet rewrite the final report to exclude unsupported branch outputs. Those are follow-up hardening tasks, not blockers for the first routed-DAG proof.
 
 ## Phase Order
 
@@ -494,18 +508,26 @@ Current limitation: Phase 3 repair is deterministic and conservative. It removes
 
 Goal: show real multi-agent workflow decomposition.
 
+Status: implemented for first deterministic artifact-level slice.
+
 Required deliverables:
 
-- Research plan artifact.
-- Branch nodes by competitor and/or dimension.
-- Branch-level statuses.
-- Branch-level eval gaps.
-- Synthesis node.
+- Done: Research plan artifact.
+- Done: Branch matrix by competitor and required dimension.
+- Done: Branch-level statuses.
+- Done: Branch-level eval gaps.
+- Done: Synthesis node.
 
 Phase 4 completion gate:
 
-- A failed branch does not erase successful branches.
-- UI can explain which competitor/dimension branch lacks evidence.
+- Done: A failed branch does not erase successful branches.
+- Done: UI can explain which competitor/dimension branch lacks evidence.
+
+Remaining hardening:
+
+- Convert artifact-level branches into explicit fan-out/fan-in workflow groups if it improves demo clarity without destabilizing the runner.
+- Make `research_synthesis` directly control final report inclusion/exclusion and record downgraded claims.
+- Add a seeded demo fixture that intentionally includes one weak competitor/dimension branch.
 
 ### Phase 5: Delivery And Demo Hardening
 
@@ -771,10 +793,10 @@ These are not priorities until Claim Trust Graph is in the product:
 
 ## Next Immediate Milestone
 
-The next implementation milestone is Phase 3:
+The next implementation milestone is Phase 6:
 
 ```text
-Eval-Guided Repair Loop
+Delivery And Demo Hardening
 ```
 
-Start by adding a repair plan artifact and deterministic repair module that can remove or downgrade unsupported claims, then show draft IQS, repair actions, and final IQS.
+Start by making the routed research synthesis policy visible in the final report path: included claims, excluded/downgraded claims, and evidence appendix entries should line up across Research Branches, Claim Trust Graph, Repair Loop, and exported report.

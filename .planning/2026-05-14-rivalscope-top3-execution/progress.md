@@ -64,6 +64,22 @@
 - Current next phase:
   - Phase 5 - Routed Research DAG.
 
+### Phase 5: Routed Research DAG
+- **Status:** complete for first deterministic artifact-level slice
+- **Completed:** 2026-05-14 23:50 CST
+- Actions taken:
+  - Created branch `codex/routed-research-dag`.
+  - Added `research_plan`, `research_branch_results`, and `research_synthesis` artifact kinds.
+  - Added Research Planner, Research Branch, and Research Synthesis agents.
+  - Routed the canonical web workflow through:
+    `research_plan -> extract -> analyze -> research_branches -> research_synthesis -> write -> critique -> judge_compare -> repair -> apply_repair -> final_eval -> trust_snapshot`.
+  - Encoded expected branch evidence failures as branch-result data rather than thrown workflow failures.
+  - Added project-page Research Branches metrics and panel.
+  - Added tolerant UI parser for latest `research_synthesis` artifact.
+  - Added persistence smoke coverage for routed research artifacts.
+- Current next phase:
+  - Phase 6 - Delivery And Demo Hardening, with likely sub-slice first: synthesis policy should influence final report inclusion/exclusion more directly.
+
 ## Test Results
 | Test | Expected | Actual | Status |
 |------|----------|--------|--------|
@@ -76,6 +92,9 @@
 | Offline judge CLI | Deterministic-only calibration emits JSON and exit 0 | `npm run eval:entailment-judges --workspace @rivalscope/agents` passed | pass |
 | RED tests for calibration-gated policy | Focused tests fail before implementation | Failed on missing policy fields and DAG order as expected | pass |
 | Focused policy tests | Repair, workflow order, and Repair Loop parser tests pass | `workflow-runner`, `run-analysis`, and `project-repair-summary` focused suites passed | pass |
+| RED tests for routed research | Focused tests fail before implementation | Failed on missing research agents and old web DAG shape as expected | pass |
+| Focused routed research tests | Branch planning, branch results, synthesis, web DAG, UI parser, and persistence pass | 39 focused tests passed | pass |
+| Typecheck after routed research | TypeScript strict checks pass | `npm run typecheck` passed | pass |
 
 ## Error Log
 | Timestamp | Error | Attempt | Resolution |
@@ -90,11 +109,11 @@
 ## 5-Question Reboot Check
 | Question | Answer |
 |----------|--------|
-| Where am I? | Phase 5 - Routed Research DAG is next. |
-| Where am I going? | Add branch-aware research planning and synthesis while preserving partial branch success. |
+| Where am I? | Phase 5 - Routed Research DAG first slice is implemented. |
+| Where am I going? | Harden the demo path and make synthesis policy affect final report inclusion/exclusion more directly. |
 | What's the goal? | Build RivalScope into a ByteDance top-3-caliber competitor-intelligence Agent OS. |
 | What have I learned? | `planning-with-files` is best used here as persistent `.planning` memory plus active-plan isolation, not as a wholesale framework import. |
-| What have I done? | Completed the reproducible judge calibration runner and calibration-gated repair policy. |
+| What have I done? | Completed the reproducible judge calibration runner, calibration-gated repair policy, and first routed research DAG slice. |
 
 ---
 Update this log after each completed phase, significant discovery, or failed attempt.

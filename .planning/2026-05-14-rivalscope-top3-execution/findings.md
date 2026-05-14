@@ -33,7 +33,7 @@
 - Tools package: source search/fetch/chunk tooling.
 - DB package: Prisma persistence with generic artifact table using string `kind`.
 - Main workflow currently includes:
-  `extract -> analyze -> write -> critique -> repair -> apply_repair -> final_eval -> trust_snapshot -> judge_compare`.
+  `research_plan -> extract -> analyze -> research_branches -> research_synthesis -> write -> critique -> judge_compare -> repair -> apply_repair -> final_eval -> trust_snapshot`.
 
 ## Implemented Differentiators
 - Agent Collaboration Trace.
@@ -47,14 +47,18 @@
 - Offline entailment calibration suite.
 - Reproducible entailment judge calibration runner with failed-case, disagreement, latency, call-count, and token-usage reporting.
 - Calibration-gated repair policy that routes severe judge disagreement to human review or conservative removal.
+- Routed research artifacts: `research_plan`, `research_branch_results`, and `research_synthesis`.
+- Branch-level evidence gates by competitor and required dimension, with `succeeded`, `partial`, and `failed` branch statuses.
+- Project-page Research Branches panel showing branch count, ready/partial/failed counts, synthesis input count, and structured evidence gaps.
 
 ## Open Risks
 - Golden entailment suite is still small and deterministic-first.
 - Mimo judge calibration now has a committed runner, but real-provider calibration results have not been captured in a tracked artifact.
-- Routed research DAG is still pending.
+- Routed research DAG is implemented as a first deterministic artifact-level slice; it does not yet create dynamic per-branch workflow nodes.
 - Human review is represented as an unresolved repair action and UI gate, not yet as a first-class workflow checkpoint.
 - Export/evidence appendix and deployment hardening are still pending.
 - UI shows many panels but does not yet converge into a single polished “Intelligence Trace” story.
+- Branch synthesis currently records included/excluded claim ids but does not yet rewrite report sections based on synthesis policy.
 
 ## Resources
 - RivalScope harness: `docs/top3-execution-harness.md`

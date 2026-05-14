@@ -13,6 +13,204 @@ function createArtifact<T>(
 }
 
 describe("persistAnalysisExecution", () => {
+  it("persists routed research artifacts and remaps their workflow output ids", async () => {
+    const workflow: Workflow = {
+      id: "workflow_project_1",
+      projectId: "project_1",
+      nodes: [
+        {
+          id: "research_plan",
+          type: "agent",
+          agentName: "research_plan",
+          dependsOn: [],
+          status: "succeeded",
+          inputArtifactIds: ["artifact_temp_requirements"],
+          outputArtifactIds: ["artifact_temp_research_plan"],
+          retryCount: 0,
+          maxRetries: 1,
+          currentAgentRunId: "agent_run_temp_research_plan"
+        },
+        {
+          id: "research_branches",
+          type: "agent",
+          agentName: "research_branches",
+          dependsOn: ["research_plan"],
+          status: "succeeded",
+          inputArtifactIds: [],
+          outputArtifactIds: ["artifact_temp_research_branch_results"],
+          retryCount: 0,
+          maxRetries: 1,
+          currentAgentRunId: "agent_run_temp_research_branches"
+        },
+        {
+          id: "research_synthesis",
+          type: "agent",
+          agentName: "research_synthesis",
+          dependsOn: ["research_branches"],
+          status: "succeeded",
+          inputArtifactIds: [],
+          outputArtifactIds: ["artifact_temp_research_synthesis"],
+          retryCount: 0,
+          maxRetries: 1,
+          currentAgentRunId: "agent_run_temp_research_synthesis"
+        }
+      ]
+    };
+    const artifacts: Artifact[] = [
+      createArtifact(
+        "artifact_temp_requirements",
+        "analysis_requirements",
+        {
+          competitors: [{ id: "competitor_cursor", name: "Cursor" }],
+          requiredDimensions: ["pricing"]
+        },
+        "2026-05-11T00:00:00.000Z"
+      ),
+      createArtifact(
+        "artifact_temp_research_plan",
+        "research_plan",
+        {
+          projectId: "project_1",
+          strategy: "competitor_dimension_matrix",
+          branches: []
+        },
+        "2026-05-11T00:00:01.000Z"
+      ),
+      createArtifact(
+        "artifact_temp_research_branch_results",
+        "research_branch_results",
+        {
+          projectId: "project_1",
+          branchResults: []
+        },
+        "2026-05-11T00:00:02.000Z"
+      ),
+      createArtifact(
+        "artifact_temp_research_synthesis",
+        "research_synthesis",
+        {
+          projectId: "project_1",
+          totalBranches: 0,
+          succeededBranches: 0,
+          partialBranches: 0,
+          failedBranches: 0,
+          evidenceGaps: [],
+          branchResults: [],
+          includedClaimIds: [],
+          excludedClaimIds: []
+        },
+        "2026-05-11T00:00:03.000Z"
+      )
+    ];
+    const repository = {
+      workflow: {
+        createAgentRun: vi
+          .fn()
+          .mockImplementation(async (input: { agentName: string }) => ({
+            id: `db_run_${input.agentName}`
+          })),
+        createToolCalls: vi.fn().mockResolvedValue({ count: 0 }),
+        createModelCalls: vi.fn().mockResolvedValue({ count: 0 }),
+        updateNodeStatuses: vi.fn().mockResolvedValue([])
+      },
+      artifact: {
+        create: vi
+          .fn()
+          .mockImplementation(async (input: { kind: string }) => ({
+            id: `db_artifact_${input.kind}`
+          }))
+      },
+      intelligence: {
+        createFact: vi.fn(),
+        createClaim: vi.fn(),
+        createReport: vi.fn(),
+        createReviewFindings: vi.fn()
+      }
+    };
+
+    const result = await persistAnalysisExecution({
+      projectId: "project_1",
+      competitors: [{ id: "competitor_cursor", name: "Cursor" }],
+      workflowRecord: {
+        id: "workflow_db_1",
+        nodes: [
+          { id: "db_node_research_plan", nodeKey: "research_plan" },
+          { id: "db_node_research_branches", nodeKey: "research_branches" },
+          { id: "db_node_research_synthesis", nodeKey: "research_synthesis" }
+        ]
+      },
+      workflow,
+      agentRuns: [
+        {
+          nodeId: "research_plan",
+          run: {
+            id: "agent_run_temp_research_plan",
+            agentName: "research_plan",
+            status: "succeeded",
+            input: {},
+            output: {},
+            startedAt: "2026-05-11T00:00:00.000Z",
+            finishedAt: "2026-05-11T00:00:01.000Z"
+          },
+          toolCalls: [],
+          modelCalls: []
+        },
+        {
+          nodeId: "research_branches",
+          run: {
+            id: "agent_run_temp_research_branches",
+            agentName: "research_branches",
+            status: "succeeded",
+            input: {},
+            output: {},
+            startedAt: "2026-05-11T00:00:01.000Z",
+            finishedAt: "2026-05-11T00:00:02.000Z"
+          },
+          toolCalls: [],
+          modelCalls: []
+        },
+        {
+          nodeId: "research_synthesis",
+          run: {
+            id: "agent_run_temp_research_synthesis",
+            agentName: "research_synthesis",
+            status: "succeeded",
+            input: {},
+            output: {},
+            startedAt: "2026-05-11T00:00:02.000Z",
+            finishedAt: "2026-05-11T00:00:03.000Z"
+          },
+          toolCalls: [],
+          modelCalls: []
+        }
+      ],
+      artifacts,
+      repositories: repository
+    });
+
+    expect(repository.artifact.create).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: "research_plan" })
+    );
+    expect(repository.artifact.create).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: "research_branch_results" })
+    );
+    expect(repository.artifact.create).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: "research_synthesis" })
+    );
+    expect(repository.workflow.updateNodeStatuses).toHaveBeenCalledWith(
+      "workflow_db_1",
+      expect.arrayContaining([
+        expect.objectContaining({
+          nodeKey: "research_synthesis",
+          outputArtifactIds: ["db_artifact_research_synthesis"]
+        })
+      ])
+    );
+    expect(repository.intelligence.createFact).not.toHaveBeenCalled();
+    expect(repository.intelligence.createReport).not.toHaveBeenCalled();
+    expect(result.report).toBeUndefined();
+  });
+
   it("persists agent runs, tool calls, and remaps temporary artifact ids to database ids", async () => {
     const workflow: Workflow = {
       id: "workflow_project_1",

@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { ProjectRepository, prisma } from "@rivalscope/db";
 import { buildProjectClaimTrustSummary } from "../../../lib/project-claim-trust";
 import { buildProjectEvalSummary } from "../../../lib/project-eval-summary";
+import { buildProjectResearchSummary } from "../../../lib/project-research-summary";
 import { buildProjectRepairSummary } from "../../../lib/project-repair-summary";
 import { runAnalysis } from "../../../lib/run-analysis";
 
@@ -85,6 +86,9 @@ export default async function ProjectPage({ params }: ProjectPageProps) {
   const repairSummary = buildProjectRepairSummary({
     artifacts: project.artifacts
   });
+  const researchSummary = buildProjectResearchSummary({
+    artifacts: project.artifacts
+  });
 
   return (
     <main className="shell">
@@ -137,6 +141,30 @@ export default async function ProjectPage({ params }: ProjectPageProps) {
               : repairSummary.delta > 0
                 ? `+${repairSummary.delta}`
                 : repairSummary.delta}
+          </strong>
+        </div>
+        <div className="metric">
+          <span className="metric-label">Research Branches</span>
+          <strong>
+            {researchSummary.status === "not_started"
+              ? "—"
+              : researchSummary.totalBranches}
+          </strong>
+        </div>
+        <div className="metric">
+          <span className="metric-label">Branch Ready</span>
+          <strong>
+            {researchSummary.status === "not_started"
+              ? "—"
+              : `${researchSummary.succeededBranches}/${researchSummary.totalBranches}`}
+          </strong>
+        </div>
+        <div className="metric">
+          <span className="metric-label">Evidence Gaps</span>
+          <strong>
+            {researchSummary.status === "not_started"
+              ? "—"
+              : researchSummary.evidenceGaps.length}
           </strong>
         </div>
         <div className="metric">
@@ -202,6 +230,95 @@ export default async function ProjectPage({ params }: ProjectPageProps) {
         </section>
 
         <aside className="grid">
+          <section className="card">
+            <h3>Research Branches</h3>
+            {researchSummary.status === "not_started" ? (
+              <p className="muted">No routed research synthesis has been generated yet.</p>
+            ) : (
+              <div className="eval-panel">
+                <div className="eval-metrics">
+                  <div className="trace-summary">
+                    <span className="metric-label">Branches</span>
+                    <strong>{researchSummary.totalBranches}</strong>
+                  </div>
+                  <div className="trace-summary">
+                    <span className="metric-label">Ready</span>
+                    <strong>{researchSummary.succeededBranches}</strong>
+                  </div>
+                  <div className="trace-summary">
+                    <span className="metric-label">Partial</span>
+                    <strong>{researchSummary.partialBranches}</strong>
+                  </div>
+                  <div className="trace-summary">
+                    <span className="metric-label">Failed</span>
+                    <strong>{researchSummary.failedBranches}</strong>
+                  </div>
+                  <div className="trace-summary">
+                    <span className="metric-label">Synthesis Inputs</span>
+                    <strong>{researchSummary.includedClaimIds.length}</strong>
+                  </div>
+                  <div className="trace-summary">
+                    <span className="metric-label">Excluded</span>
+                    <strong>{researchSummary.excludedClaimIds.length}</strong>
+                  </div>
+                </div>
+                <div className="list">
+                  {researchSummary.branchResults.map((branch) => (
+                    <div className="item compact-item" key={branch.branchId}>
+                      <div className="item-head">
+                        <strong>
+                          {branch.competitorName} · {branch.dimension}
+                        </strong>
+                        <span
+                          className={`status ${
+                            branch.status === "succeeded"
+                              ? "ok"
+                              : branch.status === "partial"
+                                ? "warn"
+                                : "bad"
+                          }`}
+                        >
+                          {branch.status}
+                        </span>
+                      </div>
+                      <div className="pill-row">
+                        <span className="pill">{branch.factCount} facts</span>
+                        <span className="pill">{branch.claimCount} claims</span>
+                        <span className="pill">
+                          {branch.evidenceGapIds.length} gaps
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                  {researchSummary.evidenceGaps.length > 0 ? (
+                    <details className="disclosure">
+                      <summary>
+                        Show {researchSummary.evidenceGaps.length} evidence gaps
+                      </summary>
+                      <div className="list compact-list">
+                        {researchSummary.evidenceGaps.map((gap) => (
+                          <div className="item compact-item" key={gap.id}>
+                            <div className="item-head">
+                              <strong>
+                                {gap.competitorName} · {gap.dimension}
+                              </strong>
+                              <span className="status warn">gap</span>
+                            </div>
+                            <p className="muted">{gap.reason}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </details>
+                  ) : (
+                    <p className="muted">
+                      All planned branches met the current synthesis evidence gate.
+                    </p>
+                  )}
+                </div>
+              </div>
+            )}
+          </section>
+
           <section className="card">
             <h3>Trajectory Eval</h3>
             {evalSummary.status === "not_started" ? (

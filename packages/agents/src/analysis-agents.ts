@@ -158,6 +158,69 @@ export interface EntailmentRepairPolicyDecision {
   dimension?: string;
 }
 
+export type ResearchBranchStatus =
+  | "planned"
+  | "succeeded"
+  | "partial"
+  | "failed";
+
+export interface ResearchBranchPlan {
+  id: string;
+  competitorId: string;
+  competitorName: string;
+  dimension: string;
+  status: "planned";
+  requiredEvidence: string[];
+  evidenceGapIds: string[];
+}
+
+export interface ResearchPlan {
+  projectId: string;
+  strategy: "competitor_dimension_matrix";
+  branches: ResearchBranchPlan[];
+}
+
+export interface ResearchBranchResult {
+  branchId: string;
+  competitorId: string;
+  competitorName: string;
+  dimension: string;
+  status: Exclude<ResearchBranchStatus, "planned">;
+  factIds: string[];
+  claimIds: string[];
+  evidenceGapIds: string[];
+}
+
+export interface ResearchEvidenceGap {
+  id: string;
+  branchId: string;
+  competitorId: string;
+  competitorName: string;
+  dimension: string;
+  reason: string;
+}
+
+export interface ResearchBranchResultsArtifact {
+  projectId: string;
+  branchResults: ResearchBranchResult[];
+}
+
+export interface ResearchSynthesis {
+  projectId: string;
+  totalBranches: number;
+  succeededBranches: number;
+  partialBranches: number;
+  failedBranches: number;
+  synthesisPolicy: {
+    allowPartialBranches: true;
+    requireEvidenceForClaimInclusion: true;
+  };
+  includedClaimIds: string[];
+  excludedClaimIds: string[];
+  evidenceGaps: ResearchEvidenceGap[];
+  branchResults: ResearchBranchResult[];
+}
+
 export interface WriterAgentOptions {
   buildSections?(claims: Claim[]): ReportSectionDraft[];
 }
@@ -166,8 +229,11 @@ export function createAnalysisWorkflowAgents(
   options: AnalysisWorkflowAgentOptions = {}
 ): Record<string, WorkflowAgent> {
   return {
+    research_plan: createResearchPlannerAgent(),
     extract: createExtractAgent(options),
     analyze: createAnalystAgent(options),
+    research_branches: createResearchBranchAgent(),
+    research_synthesis: createResearchSynthesisAgent(),
     write: createWriterAgent(),
     critique: createCriticAgent(),
     repair: createRepairPlannerAgent(),
@@ -175,6 +241,50 @@ export function createAnalysisWorkflowAgents(
     final_eval: createFinalEvaluatorAgent(),
     trust_snapshot: createClaimTrustSnapshotAgent(),
     judge_compare: createEntailmentJudgeComparisonAgent(options)
+  };
+}
+
+export function createResearchPlannerAgent(): WorkflowAgent {
+  return {
+    name: "research_plan",
+    role: "Plans routed research branches by competitor and required dimension.",
+    inputSchema: workflowAgentInputSchema,
+    outputSchema: workflowAgentOutputSchema,
+    run: async (input) => {
+      const requirements = getLatestArtifactValue<{
+        competitors?: AnalysisRequirementCompetitor[];
+        requiredDimensions?: string[];
+      }>(input.artifacts, "analysis_requirements");
+      const competitors = requirements.competitors ?? [];
+      const requiredDimensions = requirements.requiredDimensions ?? [];
+      const branches = competitors.flatMap((competitor) =>
+        requiredDimensions.map((dimension) => {
+          const competitorId = competitor.id ?? competitor.name;
+          const competitorName = competitor.name;
+
+          return {
+            id: `branch_${toStableId(competitorId)}_${toStableId(dimension)}`,
+            competitorId,
+            competitorName,
+            dimension,
+            status: "planned" as const,
+            requiredEvidence: [
+              `Evidence for ${competitorName} ${dimension} from collected sources`
+            ],
+            evidenceGapIds: []
+          };
+        })
+      );
+
+      return {
+        kind: "research_plan",
+        value: {
+          projectId: input.projectId,
+          strategy: "competitor_dimension_matrix",
+          branches
+        } satisfies ResearchPlan
+      };
+    }
   };
 }
 
@@ -334,6 +444,214 @@ export function createAnalystAgent(
         value: { projectId: input.projectId, claims }
       };
     }
+  };
+}
+
+export function createResearchBranchAgent(): WorkflowAgent {
+  return {
+    name: "research_branches",
+    role: "Evaluates branch-level evidence coverage without throwing on expected gaps.",
+    inputSchema: workflowAgentInputSchema,
+    outputSchema: workflowAgentOutputSchema,
+    run: async (input) => {
+      const plan = getLatestArtifactValue<ResearchPlan>(
+        input.artifacts,
+        "research_plan"
+      );
+      const facts = getLatestArtifactValue<{ facts: Fact[] }>(
+        input.artifacts,
+        "facts"
+      ).facts;
+      const claims = getLatestArtifactValue<{ claims: Claim[] }>(
+        input.artifacts,
+        "claims"
+      ).claims;
+      const factById = new Map(facts.map((fact) => [fact.id, fact]));
+      const branchResults = plan.branches.map((branch) =>
+        buildResearchBranchResult({
+          branch,
+          facts,
+          claims,
+          factById
+        })
+      );
+
+      return {
+        kind: "research_branch_results",
+        value: {
+          projectId: input.projectId,
+          branchResults
+        } satisfies ResearchBranchResultsArtifact
+      };
+    }
+  };
+}
+
+export function createResearchSynthesisAgent(): WorkflowAgent {
+  return {
+    name: "research_synthesis",
+    role: "Synthesizes branch results while preserving successful branches and evidence gaps.",
+    inputSchema: workflowAgentInputSchema,
+    outputSchema: workflowAgentOutputSchema,
+    run: async (input) => {
+      const branchResults =
+        getLatestArtifactValue<ResearchBranchResultsArtifact>(
+          input.artifacts,
+          "research_branch_results"
+        ).branchResults;
+      const evidenceGaps =
+        branchResults.length === 0
+          ? [createEmptyResearchPlanGap()]
+          : branchResults.flatMap((branch) =>
+              branch.evidenceGapIds.map((gapId) => ({
+                id: gapId,
+                branchId: branch.branchId,
+                competitorId: branch.competitorId,
+                competitorName: branch.competitorName,
+                dimension: branch.dimension,
+                reason: gapReason(gapId)
+              }))
+            );
+      const includedClaimIds = unique(
+        branchResults.flatMap((branch) =>
+          branch.status === "succeeded" || branch.status === "partial"
+            ? branch.claimIds
+            : []
+        )
+      );
+      const allClaimIds = unique(
+        branchResults.flatMap((branch) => branch.claimIds)
+      );
+      const includedClaimIdSet = new Set(includedClaimIds);
+      const excludedClaimIds = allClaimIds.filter(
+        (claimId) => !includedClaimIdSet.has(claimId)
+      );
+
+      return {
+        kind: "research_synthesis",
+        value: {
+          projectId: input.projectId,
+          totalBranches: branchResults.length,
+          succeededBranches: branchResults.filter(
+            (branch) => branch.status === "succeeded"
+          ).length,
+          partialBranches: branchResults.filter(
+            (branch) => branch.status === "partial"
+          ).length,
+          failedBranches: branchResults.filter(
+            (branch) => branch.status === "failed"
+          ).length,
+          synthesisPolicy: {
+            allowPartialBranches: true,
+            requireEvidenceForClaimInclusion: true
+          },
+          includedClaimIds,
+          excludedClaimIds,
+          evidenceGaps,
+          branchResults
+        } satisfies ResearchSynthesis
+      };
+    }
+  };
+}
+
+function buildResearchBranchResult(input: {
+  branch: ResearchBranchPlan;
+  facts: Fact[];
+  claims: Claim[];
+  factById: Map<string, Fact>;
+}): ResearchBranchResult {
+  const facts = input.facts.filter(
+    (fact) =>
+      fact.competitorId === input.branch.competitorId &&
+      fact.dimension === input.branch.dimension
+  );
+  const factIds = new Set(facts.map((fact) => fact.id));
+  const claims = input.claims.filter(
+    (claim) =>
+      claim.dimension === input.branch.dimension &&
+      claim.factIds.some((factId) => factIds.has(factId))
+  );
+  const claimIds = new Set(claims.map((claim) => claim.id));
+  const claimsWithMissingFacts = input.claims.filter(
+    (claim) =>
+      claim.dimension === input.branch.dimension &&
+      claim.factIds.some((factId) => {
+        const fact = input.factById.get(factId);
+
+        return fact?.competitorId === input.branch.competitorId;
+      }) &&
+      !claimIds.has(claim.id)
+  );
+  const evidenceGapIds = buildResearchEvidenceGapIds({
+    branch: input.branch,
+    factCount: facts.length,
+    claimCount: claims.length,
+    claimsWithMissingFactsCount: claimsWithMissingFacts.length
+  });
+  const status = getResearchBranchStatus({
+    factCount: facts.length,
+    claimCount: claims.length,
+    evidenceGapCount: evidenceGapIds.length
+  });
+
+  return {
+    branchId: input.branch.id,
+    competitorId: input.branch.competitorId,
+    competitorName: input.branch.competitorName,
+    dimension: input.branch.dimension,
+    status,
+    factIds: Array.from(factIds),
+    claimIds: Array.from(claimIds),
+    evidenceGapIds
+  };
+}
+
+function buildResearchEvidenceGapIds(input: {
+  branch: ResearchBranchPlan;
+  factCount: number;
+  claimCount: number;
+  claimsWithMissingFactsCount: number;
+}): string[] {
+  if (input.factCount === 0) {
+    return [`gap_${input.branch.competitorId}_${input.branch.dimension}_no_facts`].map(
+      toStableId
+    );
+  }
+
+  if (input.claimCount === 0 || input.claimsWithMissingFactsCount > 0) {
+    return [
+      `gap_${input.branch.competitorId}_${input.branch.dimension}_no_claims`
+    ].map(toStableId);
+  }
+
+  return [];
+}
+
+function getResearchBranchStatus(input: {
+  factCount: number;
+  claimCount: number;
+  evidenceGapCount: number;
+}): ResearchBranchResult["status"] {
+  if (input.factCount === 0 || input.claimCount === 0) {
+    return "failed";
+  }
+
+  if (input.evidenceGapCount > 0) {
+    return "partial";
+  }
+
+  return "succeeded";
+}
+
+function createEmptyResearchPlanGap(): ResearchEvidenceGap {
+  return {
+    id: "gap_research_plan_empty",
+    branchId: "research_plan",
+    competitorId: "research_plan",
+    competitorName: "Research Plan",
+    dimension: "planning",
+    reason: "No research branches were planned from competitors and required dimensions."
   };
 }
 
@@ -1385,6 +1703,30 @@ function inferCompetitorId(
 
 function normalizeLookupKey(value: string): string {
   return value.trim().toLowerCase();
+}
+
+function toStableId(value: string): string {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+}
+
+function unique(values: string[]): string[] {
+  return Array.from(new Set(values));
+}
+
+function gapReason(gapId: string): string {
+  if (gapId.endsWith("_no_facts")) {
+    return "No extracted facts matched this competitor and dimension.";
+  }
+
+  if (gapId.endsWith("_no_claims")) {
+    return "Extracted facts exist but no evidence-backed claims matched this branch.";
+  }
+
+  return "Branch did not meet its evidence gate.";
 }
 
 function inferDimension(text: string): string {

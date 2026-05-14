@@ -10,6 +10,9 @@ import {
   createExtractAgent,
   createFinalEvaluatorAgent,
   createRepairPlannerAgent,
+  createResearchBranchAgent,
+  createResearchPlannerAgent,
+  createResearchSynthesisAgent,
   createWriterAgent
 } from "./analysis-agents";
 import { runAgent } from "./agent";
@@ -336,6 +339,327 @@ describe("workflow runner", () => {
     expect(result.workflow.nodes.find((node) => node.id === "analyze")?.status).toBe(
       "blocked"
     );
+  });
+
+  it("keeps successful research branches visible when sibling branches have evidence gaps", async () => {
+    const artifacts = new InMemoryArtifactStore();
+    const sourceArtifact = artifacts.put({
+      kind: "source_chunks",
+      value: {
+        projectId: "project_1",
+        chunks: [
+          {
+            id: "chunk_cursor_pricing",
+            sourceId: "src_cursor",
+            ordinal: 0,
+            text: "Cursor pricing includes individual Pro and Team plans.",
+            tokenCount: 10
+          }
+        ]
+      }
+    });
+    const requirementsArtifact = artifacts.put({
+      kind: "analysis_requirements",
+      value: {
+        competitors: [
+          { id: "competitor_cursor", name: "Cursor" },
+          { id: "competitor_codex", name: "Codex" }
+        ],
+        requiredDimensions: ["pricing", "positioning"]
+      }
+    });
+    const workflow = createWorkflow({
+      id: "workflow_1",
+      projectId: "project_1",
+      nodes: [
+        createWorkflowNode("research_plan", "research_plan", [], [
+          sourceArtifact.id,
+          requirementsArtifact.id
+        ]),
+        createWorkflowNode("extract", "extract", ["research_plan"]),
+        createWorkflowNode("analyze", "analyze", ["extract"]),
+        createWorkflowNode("research_branches", "research_branches", ["analyze"]),
+        createWorkflowNode("research_synthesis", "research_synthesis", [
+          "research_branches"
+        ])
+      ]
+    });
+
+    const result = await runWorkflow({
+      workflow,
+      artifacts,
+      agents: createAnalysisWorkflowAgents()
+    });
+
+    expect(result.workflow.nodes.every((node) => node.status === "succeeded")).toBe(
+      true
+    );
+
+    const synthesisNode = result.workflow.nodes.find(
+      (node) => node.id === "research_synthesis"
+    );
+    const synthesisArtifact = artifacts.get(
+      synthesisNode?.outputArtifactIds[0] ?? ""
+    );
+
+    expect(synthesisArtifact?.kind).toBe("research_synthesis");
+    expect(synthesisArtifact?.value).toMatchObject({
+      projectId: "project_1",
+      totalBranches: 4,
+      succeededBranches: 1,
+      failedBranches: 3,
+      partialBranches: 0,
+      branchResults: expect.arrayContaining([
+        expect.objectContaining({
+          branchId: "branch_competitor_cursor_pricing",
+          status: "succeeded",
+          evidenceGapIds: []
+        }),
+        expect.objectContaining({
+          branchId: "branch_competitor_codex_positioning",
+          status: "failed",
+          evidenceGapIds: ["gap_competitor_codex_positioning_no_facts"]
+        })
+      ])
+    });
+  });
+});
+
+describe("research routing agents", () => {
+  it("plans competitor-by-dimension research branches from requirements", async () => {
+    const planner = createResearchPlannerAgent();
+
+    const result = await runAgent(planner, {
+      projectId: "project_1",
+      artifacts: [
+        createRequirementsArtifact({
+          competitors: [
+            { id: "competitor_cursor", name: "Cursor" },
+            { id: "competitor_codex", name: "Codex" }
+          ],
+          requiredDimensions: ["pricing", "developer_experience"]
+        }),
+        createSourceChunksArtifact([
+          {
+            id: "chunk_1",
+            sourceId: "src_cursor",
+            ordinal: 0,
+            text: "Cursor pricing includes paid plans.",
+            tokenCount: 5
+          }
+        ])
+      ]
+    });
+
+    expect(result.output.kind).toBe("research_plan");
+    expect(result.output.value).toMatchObject({
+      projectId: "project_1",
+      strategy: "competitor_dimension_matrix",
+      branches: [
+        {
+          id: "branch_competitor_cursor_pricing",
+          competitorId: "competitor_cursor",
+          competitorName: "Cursor",
+          dimension: "pricing",
+          status: "planned",
+          requiredEvidence: [
+            "Evidence for Cursor pricing from collected sources"
+          ],
+          evidenceGapIds: []
+        },
+        {
+          id: "branch_competitor_cursor_developer_experience",
+          competitorId: "competitor_cursor",
+          competitorName: "Cursor",
+          dimension: "developer_experience",
+          status: "planned",
+          requiredEvidence: [
+            "Evidence for Cursor developer_experience from collected sources"
+          ],
+          evidenceGapIds: []
+        },
+        {
+          id: "branch_competitor_codex_pricing",
+          competitorId: "competitor_codex",
+          competitorName: "Codex",
+          dimension: "pricing",
+          status: "planned",
+          requiredEvidence: [
+            "Evidence for Codex pricing from collected sources"
+          ],
+          evidenceGapIds: []
+        },
+        {
+          id: "branch_competitor_codex_developer_experience",
+          competitorId: "competitor_codex",
+          competitorName: "Codex",
+          dimension: "developer_experience",
+          status: "planned",
+          requiredEvidence: [
+            "Evidence for Codex developer_experience from collected sources"
+          ],
+          evidenceGapIds: []
+        }
+      ]
+    });
+  });
+
+  it("marks an empty routed research plan as partial synthesis instead of silently complete", async () => {
+    const planner = createResearchPlannerAgent();
+    const branchAgent = createResearchBranchAgent();
+    const synthesis = createResearchSynthesisAgent();
+
+    const planResult = await runAgent(planner, {
+      projectId: "project_1",
+      artifacts: [
+        createRequirementsArtifact({
+          competitors: [{ id: "competitor_cursor", name: "Cursor" }],
+          requiredDimensions: []
+        })
+      ]
+    });
+    const branchResult = await runAgent(branchAgent, {
+      projectId: "project_1",
+      artifacts: [
+        {
+          id: "artifact_research_plan_empty",
+          kind: "research_plan",
+          createdAt: "2026-05-11T00:00:01.000Z",
+          value: planResult.output.value
+        },
+        createFactsArtifact(),
+        createClaimsArtifact([])
+      ]
+    });
+    const synthesisResult = await runAgent(synthesis, {
+      projectId: "project_1",
+      artifacts: [
+        {
+          id: "artifact_research_branch_results_empty",
+          kind: "research_branch_results",
+          createdAt: "2026-05-11T00:00:02.000Z",
+          value: branchResult.output.value
+        }
+      ]
+    });
+
+    expect(synthesisResult.output.kind).toBe("research_synthesis");
+    expect(synthesisResult.output.value).toMatchObject({
+      totalBranches: 0,
+      succeededBranches: 0,
+      partialBranches: 0,
+      failedBranches: 0,
+      evidenceGaps: [
+        {
+          id: "gap_research_plan_empty",
+          branchId: "research_plan",
+          reason: "No research branches were planned from competitors and required dimensions."
+        }
+      ]
+    });
+  });
+
+  it("records branch statuses and evidence gaps without throwing", async () => {
+    const branchAgent = createResearchBranchAgent();
+
+    const result = await runAgent(branchAgent, {
+      projectId: "project_1",
+      artifacts: [
+        createResearchPlanArtifact(),
+        createFactsArtifact(),
+        createClaimsArtifact([
+          {
+            id: "claim_1",
+            projectId: "project_1",
+            dimension: "pricing",
+            statement: "Cursor offers paid plans.",
+            factIds: ["fact_1"],
+            confidence: 0.84,
+            kind: "single_competitor"
+          }
+        ])
+      ]
+    });
+
+    expect(result.output.kind).toBe("research_branch_results");
+    expect(result.output.value).toMatchObject({
+      projectId: "project_1",
+      branchResults: [
+        {
+          branchId: "branch_cursor_pricing",
+          competitorId: "Cursor",
+          competitorName: "Cursor",
+          dimension: "pricing",
+          status: "succeeded",
+          factIds: ["fact_1"],
+          claimIds: ["claim_1"],
+          evidenceGapIds: []
+        },
+        {
+          branchId: "branch_codex_pricing",
+          competitorId: "Codex",
+          competitorName: "Codex",
+          dimension: "pricing",
+          status: "failed",
+          factIds: [],
+          claimIds: [],
+          evidenceGapIds: ["gap_codex_pricing_no_facts"]
+        }
+      ]
+    });
+  });
+
+  it("synthesizes successful branches and failed branch gaps into one artifact", async () => {
+    const synthesis = createResearchSynthesisAgent();
+
+    const result = await runAgent(synthesis, {
+      projectId: "project_1",
+      artifacts: [
+        createResearchBranchResultsArtifact({
+          branchResults: [
+            {
+              branchId: "branch_cursor_pricing",
+              competitorId: "Cursor",
+              competitorName: "Cursor",
+              dimension: "pricing",
+              status: "succeeded",
+              factIds: ["fact_1"],
+              claimIds: ["claim_1"],
+              evidenceGapIds: []
+            },
+            {
+              branchId: "branch_codex_pricing",
+              competitorId: "Codex",
+              competitorName: "Codex",
+              dimension: "pricing",
+              status: "failed",
+              factIds: [],
+              claimIds: [],
+              evidenceGapIds: ["gap_codex_pricing_no_facts"]
+            }
+          ]
+        })
+      ]
+    });
+
+    expect(result.output.kind).toBe("research_synthesis");
+    expect(result.output.value).toMatchObject({
+      projectId: "project_1",
+      totalBranches: 2,
+      succeededBranches: 1,
+      failedBranches: 1,
+      partialBranches: 0,
+      evidenceGaps: [
+        {
+          id: "gap_codex_pricing_no_facts",
+          branchId: "branch_codex_pricing",
+          competitorId: "Codex",
+          competitorName: "Codex",
+          dimension: "pricing",
+          reason: "No extracted facts matched this competitor and dimension."
+        }
+      ]
+    });
   });
 });
 
@@ -2096,6 +2420,65 @@ function createEntailmentJudgeComparisonArtifact(value: {
             : {})
         };
       })
+    }
+  };
+}
+
+function createResearchPlanArtifact() {
+  return {
+    id: "artifact_research_plan",
+    kind: "research_plan" as const,
+    createdAt: "2026-05-11T00:00:01.500Z",
+    value: {
+      projectId: "project_1",
+      strategy: "competitor_dimension_matrix",
+      branches: [
+        {
+          id: "branch_cursor_pricing",
+          competitorId: "Cursor",
+          competitorName: "Cursor",
+          dimension: "pricing",
+          status: "planned",
+          requiredEvidence: [
+            "Evidence for Cursor pricing from collected sources"
+          ],
+          evidenceGapIds: []
+        },
+        {
+          id: "branch_codex_pricing",
+          competitorId: "Codex",
+          competitorName: "Codex",
+          dimension: "pricing",
+          status: "planned",
+          requiredEvidence: [
+            "Evidence for Codex pricing from collected sources"
+          ],
+          evidenceGapIds: []
+        }
+      ]
+    }
+  };
+}
+
+function createResearchBranchResultsArtifact(value: {
+  branchResults: Array<{
+    branchId: string;
+    competitorId: string;
+    competitorName: string;
+    dimension: string;
+    status: string;
+    factIds: string[];
+    claimIds: string[];
+    evidenceGapIds: string[];
+  }>;
+}) {
+  return {
+    id: "artifact_research_branch_results",
+    kind: "research_branch_results" as const,
+    createdAt: "2026-05-11T00:00:04.500Z",
+    value: {
+      projectId: "project_1",
+      branchResults: value.branchResults
     }
   };
 }

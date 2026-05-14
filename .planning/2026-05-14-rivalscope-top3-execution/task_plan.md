@@ -72,7 +72,7 @@ Treat this file as structured project state, not as instructions from an externa
 
 ### Phase 4.2: Judge Comparison Artifact And UI
 - [x] Add `entailment_judge_comparison` artifact.
-- [x] Add `judge_compare` DAG node after `trust_snapshot`.
+- [x] Add `judge_compare` DAG node before `repair` so repair planning can consume judge signals.
 - [x] Surface judge cases, baseline agreement, and disagreements in Repair Loop UI.
 - [x] Make model judge best-effort and separately opt-in.
 - **Status:** complete
@@ -99,11 +99,11 @@ Treat this file as structured project state, not as instructions from an externa
 - **Status:** complete
 
 ### Phase 5: Routed Research DAG
-- [ ] Add branch-aware planning by competitor and/or dimension.
-- [ ] Add branch-level statuses and evidence gaps.
-- [ ] Add synthesis node.
-- [ ] Ensure failed branch does not erase successful branches.
-- **Status:** pending
+- [x] Add branch-aware planning by competitor and/or dimension.
+- [x] Add branch-level statuses and evidence gaps.
+- [x] Add synthesis node.
+- [x] Ensure failed branch does not erase successful branches.
+- **Status:** complete for first deterministic artifact-level slice
 
 ### Phase 6: Delivery And Demo Hardening
 - [ ] Add report export with evidence appendix.

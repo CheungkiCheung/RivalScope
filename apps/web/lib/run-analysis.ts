@@ -149,12 +149,23 @@ export function buildAnalysisRequirements(project: {
 export function buildMvpWorkflowNodes(inputArtifactIds: string[]): WorkflowNode[] {
   return [
     {
-      id: "extract",
+      id: "research_plan",
       type: "agent",
-      agentName: "extract",
+      agentName: "research_plan",
       dependsOn: [],
       status: "pending",
       inputArtifactIds,
+      outputArtifactIds: [],
+      retryCount: 0,
+      maxRetries: 1
+    },
+    {
+      id: "extract",
+      type: "agent",
+      agentName: "extract",
+      dependsOn: ["research_plan"],
+      status: "pending",
+      inputArtifactIds: [],
       outputArtifactIds: [],
       retryCount: 0,
       maxRetries: 1
@@ -171,10 +182,32 @@ export function buildMvpWorkflowNodes(inputArtifactIds: string[]): WorkflowNode[
       maxRetries: 1
     },
     {
+      id: "research_branches",
+      type: "agent",
+      agentName: "research_branches",
+      dependsOn: ["analyze"],
+      status: "pending",
+      inputArtifactIds: [],
+      outputArtifactIds: [],
+      retryCount: 0,
+      maxRetries: 1
+    },
+    {
+      id: "research_synthesis",
+      type: "agent",
+      agentName: "research_synthesis",
+      dependsOn: ["research_branches"],
+      status: "pending",
+      inputArtifactIds: [],
+      outputArtifactIds: [],
+      retryCount: 0,
+      maxRetries: 1
+    },
+    {
       id: "write",
       type: "agent",
       agentName: "write",
-      dependsOn: ["analyze"],
+      dependsOn: ["research_synthesis"],
       status: "pending",
       inputArtifactIds: [],
       outputArtifactIds: [],

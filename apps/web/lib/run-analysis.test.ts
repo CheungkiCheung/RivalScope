@@ -49,9 +49,14 @@ describe("runAnalysis helpers", () => {
       dependsOn: node.dependsOn
     }))).toEqual([
       {
+        id: "research_plan",
+        agentName: "research_plan",
+        dependsOn: []
+      },
+      {
         id: "extract",
         agentName: "extract",
-        dependsOn: []
+        dependsOn: ["research_plan"]
       },
       {
         id: "analyze",
@@ -59,9 +64,19 @@ describe("runAnalysis helpers", () => {
         dependsOn: ["extract"]
       },
       {
+        id: "research_branches",
+        agentName: "research_branches",
+        dependsOn: ["analyze"]
+      },
+      {
+        id: "research_synthesis",
+        agentName: "research_synthesis",
+        dependsOn: ["research_branches"]
+      },
+      {
         id: "write",
         agentName: "write",
-        dependsOn: ["analyze"]
+        dependsOn: ["research_synthesis"]
       },
       {
         id: "critique",
@@ -92,7 +107,7 @@ describe("runAnalysis helpers", () => {
         id: "trust_snapshot",
         agentName: "trust_snapshot",
         dependsOn: ["final_eval"]
-      },
+      }
     ]);
   });
 });
