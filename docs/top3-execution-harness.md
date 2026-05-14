@@ -564,7 +564,18 @@ Purpose:
 - Record claim-level status: kept or removed.
 - Preserve removed weak claims as audit evidence instead of only hiding them from the final report.
 
-Current limitation: the system can now persist trust deltas, but still needs a seeded demo fixture that intentionally creates a weak draft claim and proves the repair lift in a repeatable end-to-end run.
+## Current Phase 3.7: Seeded Repair-Lift Demo
+
+Status: implemented for deterministic workflow execution and new-project creation.
+
+Purpose:
+
+- Provide a stable judge/demo project path that intentionally includes one over-strong pricing claim.
+- Prove the full loop repeatably: draft claim -> trust penalty -> repair action -> removed claim -> final eval delta -> persisted Claim Trust delta.
+- Keep the demo explicit through `[demo:repair_lift]` in project description instead of depending on a model to accidentally produce a weak claim.
+- Preserve default conservative behavior for non-demo projects.
+
+Current limitation: the seeded demo proves the repair lift offline. Later work should add an LLM/NLI-backed entailment judge behind golden fixtures and compare deterministic lexical support against semantic adjudication.
 
 ## Per-Module Work Rule
 

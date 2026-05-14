@@ -128,6 +128,7 @@ export async function runAnalysis(projectId: string) {
 }
 
 export function buildAnalysisRequirements(project: {
+  description?: string | null;
   competitors: Array<{ id: string; name: string }>;
   analysisDimensions: Array<{ key: string; required: boolean }>;
 }) {
@@ -138,7 +139,10 @@ export function buildAnalysisRequirements(project: {
     })),
     requiredDimensions: project.analysisDimensions
       .filter((dimension) => dimension.required)
-      .map((dimension) => dimension.key)
+      .map((dimension) => dimension.key),
+    ...(project.description?.includes("[demo:repair_lift]")
+      ? { demoScenario: "repair_lift" }
+      : {})
   };
 }
 

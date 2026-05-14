@@ -27,6 +27,8 @@ interface AnalysisRequirementCompetitor {
   name: string;
 }
 
+type DemoScenario = "repair_lift";
+
 export type ReviewFindingTargetType =
   | "claim"
   | "fact"
@@ -227,11 +229,12 @@ export function createAnalystAgent(
         input.artifacts,
         "facts"
       ).facts;
+      const requirements = getOptionalLatestArtifactValue<{
+        requiredDimensions?: string[];
+        demoScenario?: DemoScenario;
+      }>(input.artifacts, "analysis_requirements");
 
       if (options.model) {
-        const requirements = getOptionalLatestArtifactValue<{
-          requiredDimensions?: string[];
-        }>(input.artifacts, "analysis_requirements");
         const claims = await generateStructuredObject({
           model: options.model,
           recorder: context,
@@ -270,15 +273,22 @@ export function createAnalystAgent(
         };
       }
 
-      const claims: Claim[] = facts.map((fact, index) => ({
-        id: `claim_${index + 1}`,
+      const claims: Claim[] = withDemoScenarioClaims({
         projectId: input.projectId,
-        dimension: fact.dimension,
-        statement: `${fact.competitorId} signal: ${fact.statement}`,
-        factIds: [fact.id],
-        confidence: Math.min(fact.confidence, 0.84),
-        kind: "single_competitor"
-      }));
+        facts,
+        ...(requirements?.demoScenario
+          ? { demoScenario: requirements.demoScenario }
+          : {}),
+        claims: facts.map((fact, index) => ({
+          id: `claim_${index + 1}`,
+          projectId: input.projectId,
+          dimension: fact.dimension,
+          statement: `${fact.competitorId} signal: ${fact.statement}`,
+          factIds: [fact.id],
+          confidence: Math.min(fact.confidence, 0.84),
+          kind: "single_competitor"
+        }))
+      });
 
       return {
         kind: "claims",
@@ -286,6 +296,41 @@ export function createAnalystAgent(
       };
     }
   };
+}
+
+function withDemoScenarioClaims(input: {
+  projectId: string;
+  facts: Fact[];
+  demoScenario?: DemoScenario;
+  claims: Claim[];
+}): Claim[] {
+  if (input.demoScenario !== "repair_lift") {
+    return input.claims;
+  }
+
+  if (input.claims.some((claim) => claim.id === "claim_demo_overstated_pricing")) {
+    return input.claims;
+  }
+
+  const pricingFact = input.facts.find((fact) => fact.dimension === "pricing");
+
+  if (!pricingFact) {
+    return input.claims;
+  }
+
+  return [
+    ...input.claims,
+    {
+      id: "claim_demo_overstated_pricing",
+      projectId: input.projectId,
+      dimension: "pricing",
+      statement:
+        "Cursor guarantees the cheapest enterprise contract for every buyer.",
+      factIds: [pricingFact.id],
+      confidence: 0.49,
+      kind: "comparative"
+    }
+  ];
 }
 
 const modelFactsSchema = z.object({

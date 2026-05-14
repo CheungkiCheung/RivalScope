@@ -171,6 +171,147 @@ describe("workflow runner", () => {
     });
   });
 
+  it("runs a seeded repair lift demo with a removed weak claim and trust delta", async () => {
+    const artifacts = new InMemoryArtifactStore();
+    const sourcesArtifact = artifacts.put({
+      kind: "sources",
+      value: {
+        projectId: "project_1",
+        sources: [
+          {
+            id: "src_cursor",
+            projectId: "project_1",
+            kind: "url",
+            title: "Cursor pricing",
+            uri: "https://demo.rivalscope.local/cursor/pricing",
+            collectedAt: "2026-05-14T00:00:00.000Z"
+          }
+        ]
+      }
+    });
+    const sourceArtifact = artifacts.put({
+      kind: "source_chunks",
+      value: {
+        projectId: "project_1",
+        chunks: [
+          {
+            id: "chunk_cursor_pricing",
+            sourceId: "src_cursor",
+            ordinal: 0,
+            text: "Cursor offers individual Pro and Team plans for AI coding.",
+            tokenCount: 10
+          },
+          {
+            id: "chunk_codex_positioning",
+            sourceId: "src_codex",
+            ordinal: 0,
+            text: "Codex focuses on software engineering tasks through a coding agent workflow.",
+            tokenCount: 11
+          },
+          {
+            id: "chunk_trae_dx",
+            sourceId: "src_trae",
+            ordinal: 0,
+            text: "Trae emphasizes AI-assisted development workflows for product engineering teams.",
+            tokenCount: 9
+          }
+        ]
+      }
+    });
+    const requirementsArtifact = artifacts.put({
+      kind: "analysis_requirements",
+      value: {
+        competitors: [
+          { id: "competitor_cursor", name: "Cursor" },
+          { id: "competitor_codex", name: "Codex" },
+          { id: "competitor_trae", name: "Trae" }
+        ],
+        requiredDimensions: ["pricing", "positioning", "developer_experience"],
+        demoScenario: "repair_lift"
+      }
+    });
+    const workflow = createWorkflow({
+      id: "workflow_1",
+      projectId: "project_1",
+      nodes: [
+        createWorkflowNode("extract", "extract", [], [
+          sourcesArtifact.id,
+          sourceArtifact.id,
+          requirementsArtifact.id
+        ]),
+        createWorkflowNode("analyze", "analyze", ["extract"]),
+        createWorkflowNode("write", "write", ["analyze"]),
+        createWorkflowNode("critique", "critique", ["write"]),
+        createWorkflowNode("repair", "repair", ["critique"]),
+        createWorkflowNode("apply_repair", "apply_repair", ["repair"]),
+        createWorkflowNode("final_eval", "final_eval", ["apply_repair"]),
+        createWorkflowNode("trust_snapshot", "trust_snapshot", ["final_eval"])
+      ]
+    });
+
+    const result = await runWorkflow({
+      workflow,
+      artifacts,
+      agents: createAnalysisWorkflowAgents()
+    });
+
+    expect(result.workflow.nodes.every((node) => node.status === "succeeded")).toBe(
+      true
+    );
+
+    const claimsNode = result.workflow.nodes.find((node) => node.id === "analyze");
+    const claimsArtifact = artifacts.get(claimsNode?.outputArtifactIds[0] ?? "");
+    expect(claimsArtifact?.value).toMatchObject({
+      claims: expect.arrayContaining([
+        expect.objectContaining({
+          id: "claim_demo_overstated_pricing",
+          statement:
+            "Cursor guarantees the cheapest enterprise contract for every buyer."
+        })
+      ])
+    });
+
+    const finalEvalNode = result.workflow.nodes.find(
+      (node) => node.id === "final_eval"
+    );
+    const finalEvalArtifact = artifacts.get(
+      finalEvalNode?.outputArtifactIds[0] ?? ""
+    );
+    expect(finalEvalArtifact?.value).toMatchObject({
+      status: "improved",
+      delta: expect.any(Number),
+      actions: expect.arrayContaining([
+        expect.objectContaining({
+          targetId: "claim_demo_overstated_pricing",
+          status: "applied"
+        })
+      ])
+    });
+    expect((finalEvalArtifact?.value as { delta: number }).delta).toBeGreaterThan(
+      0
+    );
+
+    const trustSnapshotNode = result.workflow.nodes.find(
+      (node) => node.id === "trust_snapshot"
+    );
+    const trustSnapshotArtifact = artifacts.get(
+      trustSnapshotNode?.outputArtifactIds[0] ?? ""
+    );
+    expect(trustSnapshotArtifact?.value).toMatchObject({
+      trustDelta: expect.any(Number),
+      claims: expect.arrayContaining([
+        expect.objectContaining({
+          claimId: "claim_demo_overstated_pricing",
+          status: "removed",
+          penalties: expect.arrayContaining(["insufficient_semantic_support"])
+        })
+      ])
+    });
+    expect(
+      (trustSnapshotArtifact?.value as { trustDelta: number }).trustDelta
+    ).toBeGreaterThan(0);
+  });
+
   it("blocks downstream nodes when an agent fails permanently", async () => {
     const artifacts = new InMemoryArtifactStore();
     const workflow = createWorkflow({

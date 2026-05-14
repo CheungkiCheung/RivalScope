@@ -178,6 +178,18 @@ textarea {
   resize: vertical;
 }
 
+.check-row {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+  min-height: 40px;
+}
+
+.check-row input {
+  height: 16px;
+  width: 16px;
+}
+
 .list {
   display: grid;
   gap: 12px;

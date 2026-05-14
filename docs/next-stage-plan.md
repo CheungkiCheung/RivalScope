@@ -40,7 +40,7 @@ The immediate next milestone after Phase 3 is:
 Semantic Evidence Sufficiency + Source-Quality-Aware Repair
 ```
 
-Current status: implemented for deterministic trust scoring, repair planning, and persisted before/after trust snapshots. Claim Trust now includes lexical `semanticSupport` and source `sourceAuthority` metrics; Repair Planner can use weak semantic-support penalties to remove unsupported-but-cited claims; `claim_trust_snapshot` artifacts preserve draft/final trust deltas.
+Current status: implemented for deterministic trust scoring, repair planning, persisted before/after trust snapshots, and a seeded repair-lift demo path. Claim Trust now includes lexical `semanticSupport` and source `sourceAuthority` metrics; Repair Planner can use weak semantic-support penalties to remove unsupported-but-cited claims; `claim_trust_snapshot` artifacts preserve draft/final trust deltas; `[demo:repair_lift]` projects prove the lift repeatably.
 
 ## Research Summary
 
@@ -227,9 +227,10 @@ Current implementation notes:
 - Repair is conservative. It removes high-severity targeted unsupported/unknown-fact claim references from the report and records missing dimensions as unresolved gaps.
 - The workflow now runs `extract -> analyze -> write -> critique -> repair -> apply_repair -> final_eval`.
 - The project page shows `Repair Delta` plus a `Repair Loop` action history from persisted artifacts.
-- The next quality jump is underway: deterministic semantic evidence sufficiency and source authority scoring are now part of Claim Trust and repair planning.
+- The next quality jump has landed: deterministic semantic evidence sufficiency and source authority scoring are now part of Claim Trust and repair planning.
 - Done: persist before/after Claim Trust snapshots as generic artifacts and show trust delta in Repair Loop.
-- Remaining work after this milestone: add a seeded demo fixture where a weak draft visibly improves after repair in a repeatable end-to-end run.
+- Done: add a seeded repair-lift fixture where a weak draft claim is removed and the final trust delta is positive in a repeatable end-to-end run.
+- Remaining work after this milestone: add an LLM/NLI-backed entailment evaluator behind golden fixtures and use it to benchmark deterministic lexical support.
 
 ## Stage 1: Real Source Tooling
 

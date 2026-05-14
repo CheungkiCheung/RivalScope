@@ -27,6 +27,21 @@ describe("runAnalysis helpers", () => {
     });
   });
 
+  it("marks repair-lift demo projects for deterministic seeded analysis", () => {
+    expect(
+      buildAnalysisRequirements({
+        description:
+          "Compare AI coding tools with a repeatable trust repair demo. [demo:repair_lift]",
+        competitors: [{ id: "competitor_cursor", name: "Cursor" }],
+        analysisDimensions: [{ key: "pricing", required: true }]
+      })
+    ).toEqual({
+      competitors: [{ id: "competitor_cursor", name: "Cursor" }],
+      requiredDimensions: ["pricing"],
+      demoScenario: "repair_lift"
+    });
+  });
+
   it("builds the eval-guided repair DAG after critique", () => {
     expect(buildMvpWorkflowNodes(["artifact_sources"]).map((node) => ({
       id: node.id,

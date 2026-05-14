@@ -13,15 +13,21 @@ import { persistSourceCollectionRun } from "../../../lib/source-collection-persi
 const defaultSource = `Cursor offers individual Pro and Team plans for AI coding.
 Codex focuses on software engineering tasks through a coding agent workflow.
 Trae emphasizes AI-assisted development workflows for product engineering teams.`;
+const repairLiftDemoMarker = "[demo:repair_lift]";
 
 export default function NewProjectPage() {
   async function createProject(formData: FormData) {
     "use server";
 
     const name = String(formData.get("name") ?? "AI coding tools analysis");
-    const description = String(
+    const rawDescription = String(
       formData.get("description") ?? "Competitive analysis for AI coding tools."
     );
+    const repairLiftDemo = formData.get("repairLiftDemo") === "on";
+    const description =
+      repairLiftDemo && !rawDescription.includes(repairLiftDemoMarker)
+        ? `${rawDescription} ${repairLiftDemoMarker}`
+        : rawDescription;
     const competitors = String(formData.get("competitors") ?? "Cursor,Codex,Trae")
       .split(",")
       .map((item) => item.trim())
@@ -135,6 +141,15 @@ export default function NewProjectPage() {
           <label htmlFor="sourceText">Seed source text</label>
           <textarea id="sourceText" name="sourceText" defaultValue={defaultSource} />
         </div>
+        <label className="check-row" htmlFor="repairLiftDemo">
+          <input
+            id="repairLiftDemo"
+            name="repairLiftDemo"
+            type="checkbox"
+            defaultChecked
+          />
+          <span>Seed repair-lift demo</span>
+        </label>
         <button className="button" type="submit">
           Create project
         </button>
