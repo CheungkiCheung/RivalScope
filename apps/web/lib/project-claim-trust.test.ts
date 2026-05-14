@@ -107,6 +107,10 @@ describe("buildProjectClaimTrustSummary", () => {
       sectionTitle: "Product and pricing",
       dimension: "product_capabilities",
       riskLevel: "low",
+      metrics: {
+        semanticSupport: expect.any(Number),
+        sourceAuthority: expect.any(Number)
+      },
       facts: [
         {
           id: "fact_1",
@@ -128,6 +132,8 @@ describe("buildProjectClaimTrustSummary", () => {
         }
       ]
     });
+    expect(summary.nodes[0]?.metrics.semanticSupport).toBeGreaterThanOrEqual(0.5);
+    expect(summary.nodes[0]?.metrics.sourceAuthority).toBeGreaterThanOrEqual(0.8);
   });
 
   it("applies high-severity targeted review findings to matching claim trust", () => {

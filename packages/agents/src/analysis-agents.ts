@@ -1,5 +1,6 @@
-import type { Claim, Fact, SourceChunk } from "@rivalscope/core";
+import type { Claim, Fact, Source, SourceChunk } from "@rivalscope/core";
 import { z } from "zod";
+import { evaluateClaimTrust } from "@rivalscope/evals";
 import {
   getLatestArtifactValue,
   getOptionalLatestArtifactValue
@@ -578,7 +579,31 @@ export function createRepairPlannerAgent(): WorkflowAgent {
         qualityScore: number;
         findings: ReviewFinding[];
       }>(input.artifacts, "review_findings");
-      const actions = buildRepairActions(review.findings);
+      const claims = getOptionalLatestArtifactValue<{ claims: Claim[] }>(
+        input.artifacts,
+        "claims"
+      )?.claims ?? [];
+      const facts = getOptionalLatestArtifactValue<{ facts: Fact[] }>(
+        input.artifacts,
+        "facts"
+      )?.facts ?? [];
+      const chunks = getOptionalLatestArtifactValue<{ chunks: SourceChunk[] }>(
+        input.artifacts,
+        "source_chunks"
+      )?.chunks ?? [];
+      const sources = getOptionalLatestArtifactValue<{ sources: Source[] }>(
+        input.artifacts,
+        "sources"
+      )?.sources ?? [];
+      const actions = dedupeRepairActions([
+        ...buildRepairActions(review.findings),
+        ...buildTrustRepairActions({
+          claims,
+          facts,
+          chunks,
+          sources
+        })
+      ]);
       const actionablePenalty = actions
         .filter((action) => action.status === "planned")
         .reduce((total, action) => total + severityPenalty(action.severity), 0);
@@ -751,6 +776,61 @@ function buildRepairActions(findings: ReviewFinding[]): RepairAction[] {
       ...(finding.dimension ? { dimension: finding.dimension } : {})
     };
   });
+}
+
+function buildTrustRepairActions(input: {
+  claims: Claim[];
+  facts: Fact[];
+  chunks: SourceChunk[];
+  sources: Source[];
+}): RepairAction[] {
+  return input.claims.flatMap((claim) => {
+    const trust = evaluateClaimTrust({
+      claim,
+      facts: input.facts,
+      chunks: input.chunks,
+      sources: input.sources
+    });
+    const semanticPenalty = trust.penalties.find(
+      (penalty) => penalty.code === "insufficient_semantic_support"
+    );
+
+    if (trust.riskLevel === "high" && semanticPenalty) {
+      return [
+        {
+          id: `repair_remove_${claim.id}`,
+          type: "remove_claim_from_report" as const,
+          targetType: "claim" as const,
+          targetId: claim.id,
+          severity: "high" as const,
+          status: "planned" as const,
+          reason: semanticPenalty.message,
+          repairSuggestion:
+            "Remove this claim or collect stronger evidence before publication.",
+          dimension: claim.dimension
+        }
+      ];
+    }
+
+    return [];
+  });
+}
+
+function dedupeRepairActions(actions: RepairAction[]): RepairAction[] {
+  const seen = new Set<string>();
+  const deduped: RepairAction[] = [];
+
+  for (const action of actions) {
+    const key = `${action.type}:${action.targetType}:${action.targetId}`;
+    if (seen.has(key)) {
+      continue;
+    }
+
+    seen.add(key);
+    deduped.push(action);
+  }
+
+  return deduped;
 }
 
 function getFinalActionStatus(

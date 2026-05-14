@@ -276,6 +276,12 @@ export default async function ProjectPage({ params }: ProjectPageProps) {
                       <span>{node.facts.length} facts</span>
                       <span>{node.chunks.length} chunks</span>
                       <span>{node.sources.length} sources</span>
+                      <span>
+                        support {Math.round(node.metrics.semanticSupport * 100)}%
+                      </span>
+                      <span>
+                        authority {Math.round(node.metrics.sourceAuthority * 100)}%
+                      </span>
                     </div>
                     <div className="evidence-facts">
                       {node.facts.map((fact) => (

@@ -999,6 +999,78 @@ describe("repair agent", () => {
       unresolvedGaps: ["developer_experience"]
     });
   });
+
+  it("plans repair for structurally cited claims with weak semantic support", async () => {
+    const repair = createRepairPlannerAgent();
+
+    const result = await runAgent(repair, {
+      projectId: "project_1",
+      artifacts: [
+        createSourcesArtifact([
+          {
+            id: "source_1",
+            projectId: "project_1",
+            kind: "url",
+            title: "Cursor pricing",
+            uri: "https://cursor.com/pricing",
+            collectedAt: "2026-05-13T00:00:00.000Z"
+          }
+        ]),
+        createSourceChunksArtifact([
+          {
+            id: "chunk_1",
+            sourceId: "source_1",
+            ordinal: 0,
+            text: "Cursor offers paid plans.",
+            tokenCount: 5
+          }
+        ]),
+        createFactsArtifact(),
+        createClaimsArtifact([
+          {
+            id: "claim_overstated",
+            projectId: "project_1",
+            dimension: "pricing",
+            statement:
+              "Cursor guarantees the cheapest enterprise contract for every buyer.",
+            factIds: ["fact_1"],
+            confidence: 0.9,
+            kind: "comparative"
+          }
+        ]),
+        createReportArtifact([
+          {
+            id: "section_summary",
+            title: "Executive Summary",
+            body:
+              "Cursor guarantees the cheapest enterprise contract for every buyer.",
+            claimIds: ["claim_overstated"]
+          }
+        ]),
+        createReviewFindingsArtifact({
+          qualityScore: 100,
+          findings: []
+        })
+      ]
+    });
+
+    expect(result.output.kind).toBe("repair_result");
+    expect(result.output.value).toMatchObject({
+      draftQualityScore: 100,
+      plannedQualityScore: 100,
+      actions: [
+        {
+          type: "remove_claim_from_report",
+          targetType: "claim",
+          targetId: "claim_overstated",
+          severity: "high",
+          status: "planned",
+          reason:
+            "Claim claim_overstated has weak lexical support from cited evidence."
+        }
+      ]
+    });
+  });
 });
 
 describe("writer agent", () => {
@@ -1089,6 +1161,24 @@ function createSourceChunksArtifact(
     kind: "source_chunks" as const,
     createdAt: "2026-05-11T00:00:01.000Z",
     value: { chunks }
+  };
+}
+
+function createSourcesArtifact(
+  sources: Array<{
+    id: string;
+    projectId: string;
+    kind: string;
+    title: string;
+    uri: string;
+    collectedAt: string;
+  }>
+) {
+  return {
+    id: "artifact_source_records",
+    kind: "sources" as const,
+    createdAt: "2026-05-11T00:00:01.000Z",
+    value: { sources }
   };
 }
 

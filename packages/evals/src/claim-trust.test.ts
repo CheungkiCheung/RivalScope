@@ -191,4 +191,90 @@ describe("evaluateClaimTrust", () => {
       message: "Quality Agent flagged this claim."
     });
   });
+
+  it("penalizes structurally cited claims when cited evidence does not semantically support the claim", () => {
+    const result = evaluateClaimTrust({
+      claim: {
+        id: "claim_semantic_gap",
+        projectId: "project_1",
+        dimension: "pricing",
+        statement:
+          "Cursor guarantees the cheapest enterprise contract for every buyer.",
+        factIds: ["fact_1"],
+        confidence: 0.9,
+        kind: "comparative"
+      },
+      facts,
+      chunks,
+      sources
+    });
+
+    expect(result.riskLevel).toBe("high");
+    expect(result.metrics.semanticSupport).toBeLessThan(0.4);
+    expect(result.penalties).toContainEqual({
+      code: "insufficient_semantic_support",
+      points: 25,
+      message:
+        "Claim claim_semantic_gap has weak lexical support from cited evidence."
+    });
+  });
+
+  it("penalizes claims supported only by low-authority sources", () => {
+    const result = evaluateClaimTrust({
+      claim: {
+        id: "claim_low_authority",
+        projectId: "project_1",
+        dimension: "pricing",
+        statement: "Cursor offers paid plans.",
+        factIds: ["fact_1"],
+        confidence: 0.86,
+        kind: "single_competitor"
+      },
+      facts: [facts[0]!],
+      chunks: [chunks[0]!],
+      sources: [
+        {
+          id: "source_1",
+          projectId: "project_1",
+          kind: "text",
+          title: "Unattributed notes",
+          uri: "manual://notes",
+          collectedAt: "2026-05-13T00:00:00.000Z"
+        }
+      ]
+    });
+
+    expect(result.metrics.sourceAuthority).toBeLessThan(0.6);
+    expect(result.penalties).toContainEqual({
+      code: "low_source_authority",
+      points: 10,
+      message: "Claim claim_low_authority relies on low-authority sources."
+    });
+  });
+
+  it("keeps official source claims high trust when semantic support is adequate", () => {
+    const result = evaluateClaimTrust({
+      claim: {
+        id: "claim_official",
+        projectId: "project_1",
+        dimension: "pricing",
+        statement: "Cursor offers paid plans.",
+        factIds: ["fact_1"],
+        confidence: 0.86,
+        kind: "single_competitor"
+      },
+      facts: [facts[0]!],
+      chunks: [chunks[0]!],
+      sources: [sources[0]!]
+    });
+
+    expect(result.metrics.semanticSupport).toBe(1);
+    expect(result.metrics.sourceAuthority).toBeGreaterThanOrEqual(0.8);
+    expect(result.penalties.map((penalty) => penalty.code)).not.toContain(
+      "insufficient_semantic_support"
+    );
+    expect(result.penalties.map((penalty) => penalty.code)).not.toContain(
+      "low_source_authority"
+    );
+  });
 });

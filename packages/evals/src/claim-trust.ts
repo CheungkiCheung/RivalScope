@@ -10,7 +10,9 @@ export type ClaimTrustPenaltyCode =
   | "chunk_without_source"
   | "low_fact_confidence"
   | "single_source"
-  | "high_severity_critic_finding";
+  | "high_severity_critic_finding"
+  | "insufficient_semantic_support"
+  | "low_source_authority";
 
 export interface ClaimTrustPenalty {
   code: ClaimTrustPenaltyCode;
@@ -24,6 +26,8 @@ export interface ClaimTrustMetrics {
   sourceTraceability: number;
   factConfidence: number;
   sourceDiversity: number;
+  semanticSupport: number;
+  sourceAuthority: number;
   citedFactCount: number;
   validFactCount: number;
   sourceChunkCount: number;
@@ -75,12 +79,20 @@ export function evaluateClaimTrust(input: EvaluateClaimTrustInput): ClaimTrustRe
   const validSources = sourceIds
     .map((sourceId) => sourceById.get(sourceId))
     .filter((source): source is Source => source !== undefined);
+  const semanticSupport = calculateSemanticSupport({
+    claim: input.claim,
+    facts: validFacts,
+    chunks: validChunks
+  });
+  const sourceAuthority = calculateSourceAuthority(validSources);
   const penalties = buildPenalties({
     claim: input.claim,
     citedFactIds,
     validFacts,
     validChunks,
     validSources,
+    semanticSupport,
+    sourceAuthority,
     factById,
     chunkById,
     sourceById,
@@ -95,17 +107,21 @@ export function evaluateClaimTrust(input: EvaluateClaimTrustInput): ClaimTrustRe
         ? 0
         : average(validFacts.map((fact) => clamp01(fact.confidence))),
     sourceDiversity: Math.min(1, validSources.length / 2),
+    semanticSupport,
+    sourceAuthority,
     citedFactCount: citedFactIds.length,
     validFactCount: validFactIds.length,
     sourceChunkCount: validChunks.length,
     sourceCount: validSources.length
   };
   const weightedScore =
-    metrics.citationValidity * 30 +
-    metrics.evidenceStrength * 25 +
-    metrics.sourceTraceability * 20 +
+    metrics.citationValidity * 20 +
+    metrics.evidenceStrength * 20 +
+    metrics.sourceTraceability * 15 +
     metrics.factConfidence * 15 +
-    metrics.sourceDiversity * 10;
+    metrics.sourceDiversity * 5 +
+    metrics.semanticSupport * 15 +
+    metrics.sourceAuthority * 10;
   const penaltyPoints = penalties.reduce((total, penalty) => total + penalty.points, 0);
   const score = Math.max(0, Math.min(100, Math.round(weightedScore - penaltyPoints)));
 
@@ -129,6 +145,8 @@ function buildPenalties(input: {
   validFacts: Fact[];
   validChunks: SourceChunk[];
   validSources: Source[];
+  semanticSupport: number;
+  sourceAuthority: number;
   factById: Map<string, Fact>;
   chunkById: Map<string, SourceChunk>;
   sourceById: Map<string, Source>;
@@ -205,6 +223,22 @@ function buildPenalties(input: {
     });
   }
 
+  if (input.validFacts.length > 0 && input.semanticSupport < 0.4) {
+    penalties.push({
+      code: "insufficient_semantic_support",
+      points: 25,
+      message: `Claim ${input.claim.id} has weak lexical support from cited evidence.`
+    });
+  }
+
+  if (input.validSources.length > 0 && input.sourceAuthority < 0.6) {
+    penalties.push({
+      code: "low_source_authority",
+      points: 10,
+      message: `Claim ${input.claim.id} relies on low-authority sources.`
+    });
+  }
+
   for (const finding of input.criticFindings) {
     if (
       finding.severity === "high" &&
@@ -229,7 +263,9 @@ function buildReasons(
   const reasons = [
     `${metrics.validFactCount}/${metrics.citedFactCount} cited facts are valid.`,
     `${metrics.sourceChunkCount} source chunks trace to ${metrics.sourceCount} sources.`,
-    `Average fact confidence is ${Math.round(metrics.factConfidence * 100)}%.`
+    `Average fact confidence is ${Math.round(metrics.factConfidence * 100)}%.`,
+    `Semantic support is ${Math.round(metrics.semanticSupport * 100)}%.`,
+    `Source authority is ${Math.round(metrics.sourceAuthority * 100)}%.`
   ];
 
   if (penalties.length === 0) {
@@ -274,3 +310,89 @@ function average(values: number[]): number {
 function clamp01(value: number): number {
   return Math.max(0, Math.min(1, value));
 }
+
+function calculateSemanticSupport(input: {
+  claim: Claim;
+  facts: Fact[];
+  chunks: SourceChunk[];
+}): number {
+  const claimTokens = tokenize(input.claim.statement);
+
+  if (claimTokens.length === 0) {
+    return 1;
+  }
+
+  const evidenceTokens = new Set(
+    [
+      ...input.facts.flatMap((fact) => tokenize(fact.statement)),
+      ...input.chunks.flatMap((chunk) => tokenize(chunk.text))
+    ]
+  );
+  const matchedTokens = claimTokens.filter((token) => evidenceTokens.has(token));
+
+  return matchedTokens.length / claimTokens.length;
+}
+
+function calculateSourceAuthority(sources: Source[]): number {
+  if (sources.length === 0) {
+    return 0;
+  }
+
+  return average(sources.map(scoreSourceAuthority));
+}
+
+function scoreSourceAuthority(source: Source): number {
+  const uri = source.uri.toLowerCase();
+  const title = source.title.toLowerCase();
+  let score = source.kind === "url" ? 0.65 : 0.35;
+
+  if (uri.startsWith("https://")) {
+    score += 0.1;
+  }
+
+  if (uri.includes("demo.rivalscope.local") || uri.startsWith("manual://")) {
+    score -= 0.15;
+  }
+
+  if (
+    includesAny(uri, ["docs", "pricing", "blog", "about", "company"]) ||
+    includesAny(title, ["docs", "pricing", "official", "company"])
+  ) {
+    score += 0.15;
+  }
+
+  return clamp01(score);
+}
+
+function tokenize(value: string): string[] {
+  return unique(
+    value
+      .toLowerCase()
+      .replace(/[^a-z0-9_]+/g, " ")
+      .split(/\s+/)
+      .map((token) => token.trim())
+      .filter((token) => token.length >= 3)
+      .filter((token) => !STOP_WORDS.has(token))
+  );
+}
+
+function includesAny(value: string, needles: string[]): boolean {
+  return needles.some((needle) => value.includes(needle));
+}
+
+const STOP_WORDS = new Set([
+  "the",
+  "and",
+  "for",
+  "with",
+  "from",
+  "that",
+  "this",
+  "its",
+  "into",
+  "every",
+  "buyer",
+  "buyers",
+  "claim",
+  "signal"
+]);

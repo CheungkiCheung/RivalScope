@@ -40,6 +40,8 @@ The immediate next milestone after Phase 3 is:
 Semantic Evidence Sufficiency + Source-Quality-Aware Repair
 ```
 
+Current status: in progress. Claim Trust now includes deterministic lexical `semanticSupport` and source `sourceAuthority` metrics, and Repair Planner can use weak semantic-support penalties to remove unsupported-but-cited claims.
+
 ## Research Summary
 
 The strongest external pattern is consistent across major agent systems:
@@ -225,7 +227,8 @@ Current implementation notes:
 - Repair is conservative. It removes high-severity targeted unsupported/unknown-fact claim references from the report and records missing dimensions as unresolved gaps.
 - The workflow now runs `extract -> analyze -> write -> critique -> repair -> apply_repair -> final_eval`.
 - The project page shows `Repair Delta` plus a `Repair Loop` action history from persisted artifacts.
-- The next quality jump should add semantic evidence sufficiency, source authority scoring, and before/after Claim Trust snapshots so optimization is harder to game.
+- The next quality jump is underway: deterministic semantic evidence sufficiency and source authority scoring are now part of Claim Trust and repair planning.
+- Remaining work after this milestone: persist before/after Claim Trust snapshots and add a seeded demo fixture where a weak draft visibly improves after repair.
 
 ## Stage 1: Real Source Tooling
 

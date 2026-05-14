@@ -527,13 +527,31 @@ P1: Source Diversity
 P1: Source Traceability
 P1: Critic Finding Impact
 P1: Eval Score Improvement After Repair
-P2: Source Authority
+P1: Semantic Evidence Support
+P1: Source Authority
 P2: Conflict Risk
 P2: Report Utility
 P2: Latency / Token Cost
 ```
 
-Do not spend major implementation time on P2 before P0 is visible in the product.
+Do not spend major implementation time on P2 before P0/P1 trust and repair metrics are visible in the product.
+
+## Current Phase 3.5: Semantic Evidence And Source-Quality Repair
+
+Status: in progress on top of the deterministic repair loop.
+
+Purpose:
+
+- Penalize structurally cited claims when the cited evidence does not lexically support the claim.
+- Penalize claims that rely only on low-authority sources.
+- Feed these trust penalties into Repair Planner so unsupported-but-cited claims can be removed instead of passing because references are syntactically valid.
+
+Current deterministic formula additions:
+
+- `semanticSupport`: overlap between meaningful claim tokens and cited fact/source-chunk tokens.
+- `sourceAuthority`: explicit score based on source kind, HTTPS, official/docs/pricing/company URI signals, and local/manual-source penalties.
+
+Current limitation: this is not full semantic entailment. It is an offline, explainable first gate for obvious hallucinated or over-strong claims. Later work should add LLM/NLI-style entailment checks behind eval fixtures and persist before/after Claim Trust snapshots.
 
 ## Per-Module Work Rule
 

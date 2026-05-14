@@ -1,5 +1,6 @@
 export type ArtifactKind =
   | "analysis_requirements"
+  | "sources"
   | "source_chunks"
   | "facts"
   | "claims"

@@ -21,6 +21,7 @@ export const workflowAgentInputSchema = z.object({
       id: z.string(),
       kind: z.enum([
         "analysis_requirements",
+        "sources",
         "source_chunks",
         "facts",
         "claims",
@@ -38,6 +39,7 @@ export const workflowAgentInputSchema = z.object({
 export const workflowAgentOutputSchema = z.object({
   kind: z.enum([
     "analysis_requirements",
+    "sources",
     "source_chunks",
     "facts",
     "claims",

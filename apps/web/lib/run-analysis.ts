@@ -25,6 +25,20 @@ export async function runAnalysis(projectId: string) {
   }
 
   const artifacts = new InMemoryArtifactStore();
+  const sourcesArtifact = artifacts.put({
+    kind: "sources",
+    value: {
+      projectId,
+      sources: project.sources.map((source) => ({
+        id: source.id,
+        projectId,
+        kind: source.kind.toLowerCase(),
+        title: source.title,
+        uri: source.uri,
+        collectedAt: source.collectedAt.toISOString()
+      }))
+    }
+  });
   const sourceChunks = project.sources.flatMap((source) =>
     source.chunks.map((chunk) => ({
       id: chunk.id,
@@ -49,7 +63,11 @@ export async function runAnalysis(projectId: string) {
   const workflow = createWorkflow({
     id: `workflow_${projectId}`,
     projectId,
-    nodes: buildMvpWorkflowNodes([sourceArtifact.id, requirementsArtifact.id])
+    nodes: buildMvpWorkflowNodes([
+      sourcesArtifact.id,
+      sourceArtifact.id,
+      requirementsArtifact.id
+    ])
   });
 
   const workflowRecord = await new WorkflowRepository(prisma).create({
