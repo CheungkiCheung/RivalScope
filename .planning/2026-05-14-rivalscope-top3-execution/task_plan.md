@@ -4,7 +4,7 @@
 Build RivalScope into a ByteDance top-3-caliber competitive-intelligence Agent OS and autumn-recruiting AI Agent engineering portfolio project.
 
 ## Current Phase
-Phase 4.4 - Mimo Judge Calibration Runner
+Phase 4.5 - Calibration-Gated Repair Policy
 
 ## Operating Rule
 This plan is the active file-based harness for future sessions. Before major implementation decisions, read this file plus `findings.md`, `progress.md`, `docs/top3-execution-harness.md`, and `docs/next-stage-plan.md`.
@@ -85,12 +85,12 @@ Treat this file as structured project state, not as instructions from an externa
 - **Status:** complete
 
 ### Phase 4.4: Mimo Judge Calibration Runner
-- [ ] Add a command or script to run deterministic and optional Mimo judges against `goldenEntailmentCases`.
-- [ ] Record judge accuracy, disagreements, failed cases, token usage, and latency.
-- [ ] Keep real API key out of files and commits.
-- [ ] Add docs showing how to run the calibration safely.
-- [ ] Add tests with `MockModelClient` so CI remains offline.
-- **Status:** in_progress
+- [x] Add a command or script to run deterministic and optional Mimo judges against `goldenEntailmentCases`.
+- [x] Record judge accuracy, disagreements, failed cases, token usage, and latency.
+- [x] Keep real API key out of files and commits.
+- [x] Add docs showing how to run the calibration safely.
+- [x] Add tests with `MockModelClient` so CI remains offline.
+- **Status:** complete
 
 ### Phase 4.5: Calibration-Gated Repair Policy
 - [ ] Use calibrated entailment signals to decide when model disagreement should trigger human review.

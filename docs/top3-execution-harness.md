@@ -640,6 +640,20 @@ Purpose:
 
 Current limitation: the golden suite is still small and deterministic-first. The next quality step is to add more domain-specific cases, then run the optional Mimo judge against the same suite and track where it beats or loses to deterministic entailment.
 
+## Current Phase 4.4: Mimo Judge Calibration Runner
+
+Status: implemented for reproducible offline and opt-in model calibration.
+
+Purpose:
+
+- Add `npm run eval:entailment-judges --workspace @rivalscope/agents` as a dedicated judge calibration command.
+- Run deterministic entailment calibration by default with no network or credentials.
+- Add an opt-in Mimo/OpenAI-compatible path gated by `RIVALSCOPE_ENABLE_MODEL_ENTAILMENT_JUDGE="true"` and provider environment variables.
+- Emit judge accuracy, label/dimension/risk buckets, failed case details, disagreements, latency, model call count, and token usage.
+- Keep tests offline with `MockModelClient` while proving model usage accounting and failed-case reporting.
+
+Current limitation: the command measures judge quality but does not yet use calibrated disagreement to change repair policy. The next phase should convert high-risk model/deterministic disagreement into explicit human-review or repair-routing gates.
+
 ## Per-Module Work Rule
 
 Every metric or module should ship with:

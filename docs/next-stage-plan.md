@@ -40,7 +40,7 @@ The immediate next milestone after Phase 3 is:
 Semantic Evidence Sufficiency + Source-Quality-Aware Repair
 ```
 
-Current status: implemented for deterministic trust scoring, repair planning, persisted before/after trust snapshots, a seeded repair-lift demo path, a standalone entailment eval harness, an optional Mimo-backed entailment judge, a workflow-level judge comparison artifact/UI, and an offline entailment calibration suite. Claim Trust now includes lexical `semanticSupport` and source `sourceAuthority` metrics; Repair Planner can use weak semantic-support penalties to remove unsupported-but-cited claims; `claim_trust_snapshot` artifacts preserve draft/final trust deltas; `[demo:repair_lift]` projects prove the lift repeatably; `entailment_judge_comparison` artifacts expose deterministic/model judge baseline agreement and disagreements on the project page; `npm run eval:golden` now reports both trajectory quality and entailment calibration by label, dimension, and risk type.
+Current status: implemented for deterministic trust scoring, repair planning, persisted before/after trust snapshots, a seeded repair-lift demo path, a standalone entailment eval harness, an optional Mimo-backed entailment judge, a workflow-level judge comparison artifact/UI, an offline entailment calibration suite, and a dedicated entailment judge calibration runner. Claim Trust now includes lexical `semanticSupport` and source `sourceAuthority` metrics; Repair Planner can use weak semantic-support penalties to remove unsupported-but-cited claims; `claim_trust_snapshot` artifacts preserve draft/final trust deltas; `[demo:repair_lift]` projects prove the lift repeatably; `entailment_judge_comparison` artifacts expose deterministic/model judge baseline agreement and disagreements on the project page; `npm run eval:golden` now reports both trajectory quality and entailment calibration by label, dimension, and risk type; `npm run eval:entailment-judges --workspace @rivalscope/agents` reports judge accuracy, failed cases, disagreements, latency, model calls, and token usage.
 
 ## Research Summary
 
@@ -234,7 +234,8 @@ Current implementation notes:
 - Done: add an optional Mimo-backed model entailment judge behind the same interface and compare it against deterministic lexical support on golden fixtures.
 - Done: persist live workflow judge comparisons as `entailment_judge_comparison` artifacts and surface judge cases, baseline agreement, and disagreements in the Repair Loop UI.
 - Done: add an offline golden entailment calibration suite with label, dimension, and risk-type buckets.
-- Remaining work after this milestone: run the optional Mimo judge against the calibration suite and use calibrated disagreement signals for human review routing or repair gating.
+- Done: add a reproducible judge calibration runner that can run deterministic-only offline or add the configured Mimo judge behind environment gates.
+- Remaining work after this milestone: use calibrated disagreement signals for human review routing or repair gating.
 
 ## Stage 1: Real Source Tooling
 

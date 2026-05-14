@@ -45,10 +45,11 @@
 - Optional Mimo model provider.
 - Entailment judge comparison artifact/UI.
 - Offline entailment calibration suite.
+- Reproducible entailment judge calibration runner with failed-case, disagreement, latency, call-count, and token-usage reporting.
 
 ## Open Risks
 - Golden entailment suite is still small and deterministic-first.
-- Mimo judge has not yet been run against the calibration suite in a committed, reproducible runner.
+- Mimo judge calibration now has a committed runner, but real-provider calibration results have not been captured in a tracked artifact.
 - Routed research DAG is still pending.
 - Export/evidence appendix and deployment hardening are still pending.
 - UI shows many panels but does not yet converge into a single polished “Intelligence Trace” story.

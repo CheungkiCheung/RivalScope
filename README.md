@@ -137,6 +137,14 @@ npm run eval:golden
 
 The golden suite intentionally includes both a healthy trajectory and a broken trajectory. The broken case is expected to produce unsupported-claim, unknown-fact, and missing-dimension findings. The same command also runs entailment calibration cases across `entailed`, `partial`, `unsupported`, and `contradicted` labels, including direct support, partial support, lexical over-strong qualifiers, and contradiction risks, without any network or model calls.
 
+Run offline entailment judge calibration:
+
+```bash
+npm run eval:entailment-judges --workspace @rivalscope/agents
+```
+
+This command compares configured entailment judges against `goldenEntailmentCases` and emits JSON with accuracy, label/dimension/risk buckets, failed cases, judge disagreements, latency, model call count, and token usage. By default it runs only the deterministic judge and requires no network credentials.
+
 Validate the Prisma schema:
 
 ```bash
@@ -201,6 +209,19 @@ Model-backed entailment judging is a separate, best-effort comparison path. It i
 ```bash
 RIVALSCOPE_ENABLE_MODEL_ENTAILMENT_JUDGE="true"
 ```
+
+To run the Mimo judge against the golden calibration suite, set the Mimo environment variables in your local shell and run the calibration command:
+
+```bash
+RIVALSCOPE_ENABLE_MODEL_ENTAILMENT_JUDGE="true" \
+RIVALSCOPE_MODEL_PROVIDER="mimo" \
+MIMO_API_KEY="$MIMO_API_KEY" \
+MIMO_MODEL="mimo-v2-pro" \
+MIMO_BASE_URL="https://api.xiaomimimo.com/v1" \
+npm run eval:entailment-judges --workspace @rivalscope/agents
+```
+
+Keep the real key in your shell or secret manager, not in repository files, docs, fixtures, tests, or committed command history. A nonzero exit means at least one judge failed a golden case and the JSON `failedCaseDetails` / `disagreements` fields should be inspected before using model disagreement for repair routing.
 
 The model gateway is intentionally OpenAI-compatible rather than SDK-specific. This keeps tests offline while leaving room to connect OpenAI, Volcano Ark, or any compatible endpoint through environment variables. Model-backed Extract and Analyst agents still validate structured output locally: the system assigns fact and claim IDs, rejects model references to unknown chunks or facts, and rejects generated facts assigned to competitors outside the project allowlist before artifacts enter the evidence chain. Each model task is recorded as a model call trace with provider, task, status, bounded prompt trace input, bounded output, token usage when available, and validation/provider errors.
 

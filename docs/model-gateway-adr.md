@@ -25,6 +25,7 @@ OpenAI-compatible HTTP is the first real adapter because it is simple, widely su
 - Model calls are captured as first-class `ModelCall` observability records with provider, model, task, bounded prompt trace input, bounded response content, token usage, status, and error context.
 - The web app requires `RIVALSCOPE_ANALYSIS_AGENT_MODE="model"` and `RIVALSCOPE_MODEL_PROVIDER="openai-compatible"` before model-backed analysis agents are enabled, even if provider credentials are present.
 - Model-backed entailment judging also requires `RIVALSCOPE_ENABLE_MODEL_ENTAILMENT_JUDGE="true"` because it can add one model call per claim. It is best-effort: provider or validation failure produces a partial `entailment_judge_comparison` artifact instead of blocking the core report workflow.
+- `npm run eval:entailment-judges --workspace @rivalscope/agents` runs judge calibration against `goldenEntailmentCases`. It is deterministic-only by default and can add the configured Mimo/OpenAI-compatible judge when `RIVALSCOPE_ENABLE_MODEL_ENTAILMENT_JUDGE="true"`. The JSON output records accuracy, failed cases, disagreements, latency, model call count, and token usage so judge quality can be measured before model disagreement affects repair routing.
 - Failed model output validation is persisted as a failed agent run and visible workflow state; persistence no longer requires downstream report artifacts after an upstream model failure.
 
 ## Known Gaps
