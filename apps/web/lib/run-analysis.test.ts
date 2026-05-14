@@ -87,6 +87,11 @@ describe("runAnalysis helpers", () => {
         id: "trust_snapshot",
         agentName: "trust_snapshot",
         dependsOn: ["final_eval"]
+      },
+      {
+        id: "judge_compare",
+        agentName: "judge_compare",
+        dependsOn: ["trust_snapshot"]
       }
     ]);
   });

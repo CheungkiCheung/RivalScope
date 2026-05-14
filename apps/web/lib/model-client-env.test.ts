@@ -34,6 +34,19 @@ describe("model client env", () => {
     });
 
     expect(options.model?.name).toBe("openai-compatible");
+    expect(options.enableModelEntailmentJudge).toBe(false);
+  });
+
+  test("requires a separate opt-in for model-backed entailment judging", () => {
+    const options = createAnalysisAgentOptionsFromEnv({
+      RIVALSCOPE_ANALYSIS_AGENT_MODE: "model",
+      RIVALSCOPE_MODEL_PROVIDER: "mimo",
+      MIMO_API_KEY: "test-key",
+      RIVALSCOPE_ENABLE_MODEL_ENTAILMENT_JUDGE: "true"
+    });
+
+    expect(options.model?.name).toBe("mimo");
+    expect(options.enableModelEntailmentJudge).toBe(true);
   });
 
   test("enables Mimo as an OpenAI-compatible model provider", () => {

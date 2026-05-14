@@ -26,7 +26,10 @@ export function createAnalysisAgentOptionsFromEnv(
   }
 
   return {
-    model: createConfiguredModelClient(env)
+    model: createConfiguredModelClient(env),
+    enableModelEntailmentJudge:
+      env.RIVALSCOPE_ENABLE_MODEL_ENTAILMENT_JUDGE?.trim().toLowerCase() ===
+      "true"
   };
 }
 

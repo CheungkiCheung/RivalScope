@@ -36,6 +36,10 @@ export interface EntailmentJudgeComparisonSummary {
     caseId: string;
     labels: Record<string, EntailmentLabel>;
   }>;
+  caseLabels: Array<{
+    caseId: string;
+    labels: Record<string, EntailmentLabel>;
+  }>;
 }
 
 export interface ModelEntailmentJudgeOptions {
@@ -133,6 +137,13 @@ export async function compareEntailmentJudges(
   return {
     totalCases: input.cases.length,
     judges: resultsByJudge.map((entry) => entry.summary),
+    caseLabels: input.cases.map((benchmarkCase) => ({
+      caseId: benchmarkCase.id,
+      labels: buildLabelsForCase({
+        caseId: benchmarkCase.id,
+        resultsByJudge
+      })
+    })),
     disagreements: input.cases.flatMap((benchmarkCase) => {
       const labels = Object.fromEntries(
         resultsByJudge.map((entry) => [
@@ -155,6 +166,25 @@ export async function compareEntailmentJudges(
       ];
     })
   };
+}
+
+function buildLabelsForCase(input: {
+  caseId: string;
+  resultsByJudge: Array<{
+    judge: EntailmentJudge;
+    results: Array<{
+      caseId: string;
+      expectedLabel: EntailmentLabel;
+      result: ClaimEntailmentResult;
+    }>;
+  }>;
+}): Record<string, EntailmentLabel> {
+  return Object.fromEntries(
+    input.resultsByJudge.map((entry) => [
+      entry.judge.name,
+      entry.results.find((result) => result.caseId === input.caseId)?.result.label
+    ])
+  ) as Record<string, EntailmentLabel>;
 }
 
 function countLabels(labels: EntailmentLabel[]): Record<EntailmentLabel, number> {

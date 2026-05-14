@@ -165,6 +165,97 @@ describe("buildProjectRepairSummary", () => {
     });
   });
 
+  it("adds judge comparison disagreement details from the latest artifact", () => {
+    const summary = buildProjectRepairSummary({
+      artifacts: [
+        {
+          id: "artifact_final_eval",
+          kind: "final_eval",
+          createdAt: new Date("2026-05-14T00:00:00.000Z"),
+          value: {
+            status: "improved",
+            draftQualityScore: 70,
+            repairedQualityScore: 90,
+            delta: 20,
+            actions: [],
+            unresolvedGaps: []
+          }
+        },
+        {
+          id: "artifact_judge_comparison",
+          kind: "entailment_judge_comparison",
+          createdAt: new Date("2026-05-14T00:01:00.000Z"),
+          value: {
+            totalCases: 2,
+            judges: [
+              {
+                name: "deterministic",
+                passedCases: 2,
+                failedCases: 0,
+                accuracy: 1,
+                labelCounts: {
+                  entailed: 1,
+                  partial: 0,
+                  unsupported: 1,
+                  contradicted: 0
+                }
+              },
+              {
+                name: "model",
+                passedCases: 1,
+                failedCases: 1,
+                accuracy: 0.5,
+                labelCounts: {
+                  entailed: 1,
+                  partial: 1,
+                  unsupported: 0,
+                  contradicted: 0
+                }
+              }
+            ],
+            disagreements: [
+              {
+                caseId: "claim_2",
+                labels: {
+                  deterministic: "unsupported",
+                  model: "partial"
+                }
+              }
+            ]
+          }
+        }
+      ]
+    });
+
+    expect(summary.judgeComparison).toEqual({
+      totalCases: 2,
+      disagreementsCount: 1,
+      judges: [
+        {
+          name: "deterministic",
+          alignedCases: 2,
+          disagreedCases: 0,
+          baselineAgreement: 1
+        },
+        {
+          name: "model",
+          alignedCases: 1,
+          disagreedCases: 1,
+          baselineAgreement: 0.5
+        }
+      ],
+      disagreements: [
+        {
+          caseId: "claim_2",
+          labels: {
+            deterministic: "unsupported",
+            model: "partial"
+          }
+        }
+      ]
+    });
+  });
+
   it("ignores malformed final_eval artifacts instead of crashing the page", () => {
     expect(
       buildProjectRepairSummary({

@@ -195,6 +195,12 @@ MIMO_MODEL="mimo-v2-pro"
 MIMO_BASE_URL="https://api.xiaomimimo.com/v1"
 ```
 
+Model-backed entailment judging is a separate, best-effort comparison path. It is disabled by default so general model-backed extraction/synthesis does not add one extra LLM call per claim. To compare the deterministic entailment baseline with the configured model judge, set:
+
+```bash
+RIVALSCOPE_ENABLE_MODEL_ENTAILMENT_JUDGE="true"
+```
+
 The model gateway is intentionally OpenAI-compatible rather than SDK-specific. This keeps tests offline while leaving room to connect OpenAI, Volcano Ark, or any compatible endpoint through environment variables. Model-backed Extract and Analyst agents still validate structured output locally: the system assigns fact and claim IDs, rejects model references to unknown chunks or facts, and rejects generated facts assigned to competitors outside the project allowlist before artifacts enter the evidence chain. Each model task is recorded as a model call trace with provider, task, status, bounded prompt trace input, bounded output, token usage when available, and validation/provider errors.
 
 The MVP flow is:

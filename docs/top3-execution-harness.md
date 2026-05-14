@@ -350,6 +350,16 @@ Repair actions: 4
 Final IQS: 88
 ```
 
+The repair loop should also show judge disagreement when multiple entailment judges are configured:
+
+```text
+claim -> deterministic judge label
+claim -> model judge label
+disagreement -> human review or fixture expansion
+```
+
+This is a top-3 signal: RivalScope does not blindly trust the LLM judge. It treats judge disagreement as auditable product data.
+
 ### 6. Routed Research DAG
 
 The workflow should become branch-aware:
@@ -600,6 +610,21 @@ Purpose:
 - Keep deterministic/offline execution as the default so tests and demos do not require API credentials.
 
 Current limitation: model judge quality still needs a larger golden entailment fixture set and disagreement UI. The provider is available, but production workflows should only enable it after fixture accuracy and cost are tracked.
+
+## Current Phase 4.2: Judge Comparison Artifact And UI
+
+Status: implemented for workflow artifact persistence and project-page visibility.
+
+Purpose:
+
+- Add `entailment_judge_comparison` as a first-class workflow artifact.
+- Extend the DAG with `judge_compare` after `trust_snapshot`.
+- Compare the deterministic entailment judge with an optional configured model judge when `RIVALSCOPE_ENABLE_MODEL_ENTAILMENT_JUDGE="true"`.
+- Surface judge cases, baseline agreement, and disagreement rows inside the Repair Loop.
+- Keep deterministic-only execution as the default so local tests and demos remain stable without API credentials.
+- Keep model judge comparison best-effort so provider errors create a partial artifact instead of blocking the core report workflow.
+
+Current limitation: the comparison currently evaluates claims from the existing extracted evidence and uses deterministic labels as the live baseline, not human-calibrated accuracy. The next quality step is to expand the golden entailment fixture set and use it as the calibration dataset before enabling model judge decisions in production repair routing.
 
 ## Per-Module Work Rule
 

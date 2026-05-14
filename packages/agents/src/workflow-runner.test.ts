@@ -6,6 +6,7 @@ import {
   createApplyRepairAgent,
   createClaimTrustSnapshotAgent,
   createCriticAgent,
+  createEntailmentJudgeComparisonAgent,
   createExtractAgent,
   createFinalEvaluatorAgent,
   createRepairPlannerAgent,
@@ -1270,6 +1271,185 @@ describe("repair agent", () => {
     expect(value.trustDelta).toBe(
       value.finalAverageTrust - value.draftAverageTrust
     );
+  });
+
+  it("creates an entailment judge comparison artifact from persisted claims and evidence", async () => {
+    const judgeCompare = createEntailmentJudgeComparisonAgent();
+
+    const result = await runAgent(judgeCompare, {
+      projectId: "project_1",
+      artifacts: [
+        createSourceChunksArtifact([
+          {
+            id: "chunk_1",
+            sourceId: "source_1",
+            ordinal: 0,
+            text: "Cursor offers paid plans.",
+            tokenCount: 5
+          }
+        ]),
+        createFactsArtifact(),
+        createClaimsArtifact([
+          {
+            id: "claim_supported",
+            projectId: "project_1",
+            dimension: "pricing",
+            statement: "Cursor offers paid plans.",
+            factIds: ["fact_1"],
+            confidence: 0.84,
+            kind: "single_competitor"
+          },
+          {
+            id: "claim_overstated",
+            projectId: "project_1",
+            dimension: "pricing",
+            statement:
+              "Cursor guarantees the cheapest enterprise contract for every buyer.",
+            factIds: ["fact_1"],
+            confidence: 0.9,
+            kind: "comparative"
+          }
+        ])
+      ]
+    });
+
+    expect(result.output.kind).toBe("entailment_judge_comparison");
+    expect(result.output.value).toMatchObject({
+      projectId: "project_1",
+      totalCases: 2,
+      judges: [
+        {
+          name: "deterministic",
+          passedCases: 2,
+          failedCases: 0,
+          accuracy: 1
+        }
+      ],
+      cases: [
+        {
+          caseId: "claim_supported",
+          claimId: "claim_supported",
+          expectedLabel: "entailed",
+          labels: {
+            deterministic: "entailed"
+          }
+        },
+        {
+          caseId: "claim_overstated",
+          claimId: "claim_overstated",
+          expectedLabel: "unsupported",
+          labels: {
+            deterministic: "unsupported"
+          }
+        }
+      ],
+      disagreements: []
+    });
+  });
+
+  it("keeps model entailment judging disabled unless explicitly enabled", async () => {
+    const model = new MockModelClient([
+      {
+        content: JSON.stringify({
+          label: "entailed",
+          supportScore: 1,
+          matchedTokens: ["cursor"],
+          missingTokens: [],
+          contradictions: [],
+          reasons: ["Model call should not be used without explicit opt-in."]
+        })
+      }
+    ]);
+    const judgeCompare = createEntailmentJudgeComparisonAgent({ model });
+
+    const result = await runAgent(judgeCompare, {
+      projectId: "project_1",
+      artifacts: [
+        createSourceChunksArtifact([
+          {
+            id: "chunk_1",
+            sourceId: "source_1",
+            ordinal: 0,
+            text: "Cursor offers paid plans.",
+            tokenCount: 5
+          }
+        ]),
+        createFactsArtifact(),
+        createClaimsArtifact([
+          {
+            id: "claim_supported",
+            projectId: "project_1",
+            dimension: "pricing",
+            statement: "Cursor offers paid plans.",
+            factIds: ["fact_1"],
+            confidence: 0.84,
+            kind: "single_competitor"
+          }
+        ])
+      ]
+    });
+
+    expect(model.calls).toHaveLength(0);
+    expect(result.modelCalls).toHaveLength(0);
+    expect(result.output.value).toMatchObject({
+      judges: [
+        {
+          name: "deterministic"
+        }
+      ]
+    });
+  });
+
+  it("emits a failed comparison artifact instead of failing the workflow when a model judge fails", async () => {
+    const judgeCompare = createEntailmentJudgeComparisonAgent({
+      model: new MockModelClient([{ content: "not json" }]),
+      enableModelEntailmentJudge: true
+    });
+
+    const result = await runAgent(judgeCompare, {
+      projectId: "project_1",
+      artifacts: [
+        createSourceChunksArtifact([
+          {
+            id: "chunk_1",
+            sourceId: "source_1",
+            ordinal: 0,
+            text: "Cursor offers paid plans.",
+            tokenCount: 5
+          }
+        ]),
+        createFactsArtifact(),
+        createClaimsArtifact([
+          {
+            id: "claim_supported",
+            projectId: "project_1",
+            dimension: "pricing",
+            statement: "Cursor offers paid plans.",
+            factIds: ["fact_1"],
+            confidence: 0.84,
+            kind: "single_competitor"
+          }
+        ])
+      ]
+    });
+
+    expect(result.output.kind).toBe("entailment_judge_comparison");
+    expect(result.output.value).toMatchObject({
+      projectId: "project_1",
+      status: "partial",
+      errorMessage: "Model output for entailment_judge was not valid JSON",
+      judges: [
+        {
+          name: "deterministic"
+        }
+      ],
+      disagreements: []
+    });
+    expect(result.modelCalls[0]).toMatchObject({
+      provider: "mock",
+      task: "entailment_judge",
+      status: "failed"
+    });
   });
 
   it("plans repair for structurally cited claims with weak semantic support", async () => {

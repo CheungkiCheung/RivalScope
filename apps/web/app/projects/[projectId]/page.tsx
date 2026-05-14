@@ -364,8 +364,83 @@ export default async function ProjectPage({ params }: ProjectPageProps) {
                       </div>
                     </>
                   ) : null}
+                  {repairSummary.judgeComparison ? (
+                    <>
+                      <div className="trace-summary">
+                        <span className="metric-label">Judge Cases</span>
+                        <strong>{repairSummary.judgeComparison.totalCases}</strong>
+                      </div>
+                      <div className="trace-summary">
+                        <span className="metric-label">Disagreements</span>
+                        <strong>
+                          {repairSummary.judgeComparison.disagreementsCount}
+                        </strong>
+                      </div>
+                    </>
+                  ) : null}
                 </div>
                 <div className="list">
+                  {repairSummary.judgeComparison ? (
+                    <div className="item compact-item">
+                      <div className="item-head">
+                        <strong>Judge Comparison</strong>
+                        <span
+                          className={`status ${
+                            repairSummary.judgeComparison.disagreementsCount === 0
+                              ? "ok"
+                              : "warn"
+                          }`}
+                        >
+                          {repairSummary.judgeComparison.disagreementsCount === 0
+                            ? "aligned"
+                            : "review"}
+                        </span>
+                      </div>
+                      <div className="pill-row">
+                        {repairSummary.judgeComparison.judges.map((judge) => (
+                          <span className="pill" key={judge.name}>
+                            {judge.name}{" "}
+                            {Math.round(judge.baselineAgreement * 100)}% baseline
+                          </span>
+                        ))}
+                      </div>
+                      {repairSummary.judgeComparison.disagreements.length > 0 ? (
+                        <div className="list compact-list">
+                          {repairSummary.judgeComparison.disagreements.map(
+                            (disagreement) => (
+                              <div
+                                className="item compact-item"
+                                key={disagreement.caseId}
+                              >
+                                <div className="item-head">
+                                  <strong>{disagreement.caseId}</strong>
+                                  <span className="status warn">disagree</span>
+                                </div>
+                                <div className="pill-row">
+                                  {Object.entries(disagreement.labels).map(
+                                    ([judgeName, label]) => (
+                                      <span
+                                        className="pill"
+                                        key={`${disagreement.caseId}-${judgeName}`}
+                                      >
+                                        {judgeName}: {label}
+                                      </span>
+                                    )
+                                  )}
+                                </div>
+                              </div>
+                            )
+                          )}
+                        </div>
+                      ) : (
+                        <p className="muted">
+                          {repairSummary.judgeComparison.judges.length > 1
+                            ? "Deterministic and configured model judges agree on all evaluated claims."
+                            : "No model judge is configured; deterministic entailment labels are recorded as the baseline."}
+                        </p>
+                      )}
+                    </div>
+                  ) : null}
                   {repairSummary.actions.map((action) => (
                     <div className="item compact-item" key={action.id}>
                       <div className="item-head">

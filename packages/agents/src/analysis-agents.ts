@@ -1,7 +1,9 @@
 import type { Claim, Fact, Source, SourceChunk } from "@rivalscope/core";
 import { z } from "zod";
 import {
+  evaluateClaimEntailment,
   evaluateClaimTrust,
+  type EntailmentLabel,
   type ClaimTrustRiskLevel
 } from "@rivalscope/evals";
 import {
@@ -13,6 +15,12 @@ import {
   type ModelClient
 } from "./model-client";
 import {
+  compareEntailmentJudges,
+  createDeterministicEntailmentJudge,
+  createModelEntailmentJudge,
+  type EntailmentJudgeComparisonSummary
+} from "./entailment-judge";
+import {
   type WorkflowAgent,
   workflowAgentInputSchema,
   workflowAgentOutputSchema
@@ -20,6 +28,7 @@ import {
 
 export interface AnalysisWorkflowAgentOptions {
   model?: ModelClient;
+  enableModelEntailmentJudge?: boolean;
 }
 
 interface AnalysisRequirementCompetitor {
@@ -120,6 +129,23 @@ export interface ClaimTrustSnapshot {
   claims: ClaimTrustSnapshotClaim[];
 }
 
+export interface EntailmentJudgeComparisonCase {
+  caseId: string;
+  claimId: string;
+  statement: string;
+  dimension: string;
+  expectedLabel: EntailmentLabel;
+  labels: Record<string, EntailmentLabel>;
+}
+
+export interface EntailmentJudgeComparisonArtifact
+  extends EntailmentJudgeComparisonSummary {
+  projectId: string;
+  status: "succeeded" | "partial";
+  errorMessage?: string;
+  cases: EntailmentJudgeComparisonCase[];
+}
+
 export interface WriterAgentOptions {
   buildSections?(claims: Claim[]): ReportSectionDraft[];
 }
@@ -135,7 +161,8 @@ export function createAnalysisWorkflowAgents(
     repair: createRepairPlannerAgent(),
     apply_repair: createApplyRepairAgent(),
     final_eval: createFinalEvaluatorAgent(),
-    trust_snapshot: createClaimTrustSnapshotAgent()
+    trust_snapshot: createClaimTrustSnapshotAgent(),
+    judge_compare: createEntailmentJudgeComparisonAgent(options)
   };
 }
 
@@ -885,6 +912,126 @@ export function createClaimTrustSnapshotAgent(): WorkflowAgent {
         } satisfies ClaimTrustSnapshot
       };
     }
+  };
+}
+
+export function createEntailmentJudgeComparisonAgent(
+  options: AnalysisWorkflowAgentOptions = {}
+): WorkflowAgent {
+  return {
+    name: "judge_compare",
+    role: "Compares deterministic and optional model entailment judges.",
+    inputSchema: workflowAgentInputSchema,
+    outputSchema: workflowAgentOutputSchema,
+    run: async (input, context) => {
+      const claims = getLatestArtifactValue<{ claims: Claim[] }>(
+        input.artifacts,
+        "claims"
+      ).claims;
+      const facts = getLatestArtifactValue<{ facts: Fact[] }>(
+        input.artifacts,
+        "facts"
+      ).facts;
+      const chunks = getLatestArtifactValue<{ chunks: SourceChunk[] }>(
+        input.artifacts,
+        "source_chunks"
+      ).chunks;
+      const cases = claims.map((claim) => buildEntailmentComparisonCase({
+        claim,
+        facts,
+        chunks
+      }));
+      const deterministicJudge = createDeterministicEntailmentJudge();
+      const modelJudge =
+        options.model && options.enableModelEntailmentJudge
+          ? createModelEntailmentJudge({
+              model: options.model,
+              recorder: context
+            })
+          : undefined;
+      const judges = [
+        deterministicJudge,
+        ...(modelJudge
+          ? [
+              modelJudge
+            ]
+          : [])
+      ];
+      const comparison = await compareEntailmentJudgesSafely({
+        cases,
+        judges,
+        fallbackJudge: deterministicJudge
+      });
+      const labelsByCase = new Map(
+        comparison.caseLabels.map((entry) => [entry.caseId, entry.labels])
+      );
+
+      return {
+        kind: "entailment_judge_comparison",
+        value: {
+          projectId: input.projectId,
+          ...comparison,
+          status: comparison.errorMessage ? "partial" : "succeeded",
+          cases: cases.map((benchmarkCase) => ({
+            caseId: benchmarkCase.id,
+            claimId: benchmarkCase.claim.id,
+            statement: benchmarkCase.claim.statement,
+            dimension: benchmarkCase.claim.dimension,
+            expectedLabel: benchmarkCase.expectedLabel,
+            labels: labelsByCase.get(benchmarkCase.id) ?? {}
+          }))
+        } satisfies EntailmentJudgeComparisonArtifact
+      };
+    }
+  };
+}
+
+async function compareEntailmentJudgesSafely(input: {
+  cases: ReturnType<typeof buildEntailmentComparisonCase>[];
+  judges: Array<ReturnType<typeof createDeterministicEntailmentJudge>>;
+  fallbackJudge: ReturnType<typeof createDeterministicEntailmentJudge>;
+}): Promise<EntailmentJudgeComparisonSummary & { errorMessage?: string }> {
+  try {
+    return await compareEntailmentJudges({
+      cases: input.cases,
+      judges: input.judges
+    });
+  } catch (error) {
+    const fallback = await compareEntailmentJudges({
+      cases: input.cases,
+      judges: [input.fallbackJudge]
+    });
+
+    return {
+      ...fallback,
+      errorMessage: error instanceof Error ? error.message : "Judge comparison failed"
+    };
+  }
+}
+
+function buildEntailmentComparisonCase(input: {
+  claim: Claim;
+  facts: Fact[];
+  chunks: SourceChunk[];
+}) {
+  const citedFactIds = new Set(input.claim.factIds);
+  const citedFacts = input.facts.filter((fact) => citedFactIds.has(fact.id));
+  const citedChunkIds = new Set(
+    citedFacts.flatMap((fact) => fact.sourceChunkIds)
+  );
+  const citedChunks = input.chunks.filter((chunk) => citedChunkIds.has(chunk.id));
+  const expectedLabel = evaluateClaimEntailment({
+    claim: input.claim,
+    facts: citedFacts,
+    chunks: citedChunks
+  }).label;
+
+  return {
+    id: input.claim.id,
+    expectedLabel,
+    claim: input.claim,
+    facts: citedFacts,
+    chunks: citedChunks
   };
 }
 

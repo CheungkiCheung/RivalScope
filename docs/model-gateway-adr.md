@@ -24,6 +24,7 @@ OpenAI-compatible HTTP is the first real adapter because it is simple, widely su
 - Model-backed agents treat model outputs as candidates: RivalScope assigns fact and claim IDs in code, rejects unknown `sourceChunkIds` or `factIds`, and rejects fact competitors outside the project allowlist.
 - Model calls are captured as first-class `ModelCall` observability records with provider, model, task, bounded prompt trace input, bounded response content, token usage, status, and error context.
 - The web app requires `RIVALSCOPE_ANALYSIS_AGENT_MODE="model"` and `RIVALSCOPE_MODEL_PROVIDER="openai-compatible"` before model-backed analysis agents are enabled, even if provider credentials are present.
+- Model-backed entailment judging also requires `RIVALSCOPE_ENABLE_MODEL_ENTAILMENT_JUDGE="true"` because it can add one model call per claim. It is best-effort: provider or validation failure produces a partial `entailment_judge_comparison` artifact instead of blocking the core report workflow.
 - Failed model output validation is persisted as a failed agent run and visible workflow state; persistence no longer requires downstream report artifacts after an upstream model failure.
 
 ## Known Gaps

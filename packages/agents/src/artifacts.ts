@@ -8,7 +8,8 @@ export type ArtifactKind =
   | "review_findings"
   | "repair_result"
   | "final_eval"
-  | "claim_trust_snapshot";
+  | "claim_trust_snapshot"
+  | "entailment_judge_comparison";
 
 export interface Artifact<T = unknown> {
   id: string;

@@ -28,6 +28,7 @@ export interface ProjectRepairSummary {
   actions: ProjectRepairActionSummary[];
   unresolvedGaps: string[];
   claimTrust?: ProjectRepairClaimTrustSummary;
+  judgeComparison?: ProjectRepairJudgeComparisonSummary;
 }
 
 export interface ProjectRepairClaimTrustSummary {
@@ -50,6 +51,25 @@ export interface ProjectRepairClaimTrustRow {
   penalties: string[];
 }
 
+export interface ProjectRepairJudgeComparisonSummary {
+  totalCases: number;
+  disagreementsCount: number;
+  judges: ProjectRepairJudgeSummary[];
+  disagreements: ProjectRepairJudgeDisagreement[];
+}
+
+export interface ProjectRepairJudgeSummary {
+  name: string;
+  alignedCases: number;
+  disagreedCases: number;
+  baselineAgreement: number;
+}
+
+export interface ProjectRepairJudgeDisagreement {
+  caseId: string;
+  labels: Record<string, string>;
+}
+
 export function buildProjectRepairSummary(
   input: BuildProjectRepairSummaryInput
 ): ProjectRepairSummary {
@@ -63,6 +83,13 @@ export function buildProjectRepairSummary(
     .sort((left, right) => right.createdAt.getTime() - left.createdAt.getTime())
     .map((artifact) => parseClaimTrustSnapshot(artifact.value))
     .find((value): value is ProjectRepairClaimTrustSummary => value !== null);
+  const judgeComparison = [...input.artifacts]
+    .filter((artifact) => artifact.kind === "entailment_judge_comparison")
+    .sort((left, right) => right.createdAt.getTime() - left.createdAt.getTime())
+    .map((artifact) => parseJudgeComparison(artifact.value))
+    .find(
+      (value): value is ProjectRepairJudgeComparisonSummary => value !== null
+    );
 
   if (!finalEval) {
     return {
@@ -72,13 +99,15 @@ export function buildProjectRepairSummary(
       delta: null,
       actions: [],
       unresolvedGaps: [],
-      ...(claimTrust ? { claimTrust } : {})
+      ...(claimTrust ? { claimTrust } : {}),
+      ...(judgeComparison ? { judgeComparison } : {})
     };
   }
 
   return {
     ...finalEval,
-    ...(claimTrust ? { claimTrust } : {})
+    ...(claimTrust ? { claimTrust } : {}),
+    ...(judgeComparison ? { judgeComparison } : {})
   };
 }
 
@@ -215,6 +244,76 @@ function parseClaimTrustRow(value: unknown): ProjectRepairClaimTrustRow | null {
   };
 }
 
+function parseJudgeComparison(
+  value: unknown
+): ProjectRepairJudgeComparisonSummary | null {
+  if (!isRecord(value)) {
+    return null;
+  }
+
+  if (
+    typeof value.totalCases !== "number" ||
+    !Array.isArray(value.judges) ||
+    !Array.isArray(value.disagreements)
+  ) {
+    return null;
+  }
+
+  const disagreements = value.disagreements
+    .map(parseJudgeDisagreement)
+    .filter(isJudgeDisagreement);
+
+  return {
+    totalCases: value.totalCases,
+    disagreementsCount: disagreements.length,
+    judges: value.judges.map(parseJudgeSummary).filter(isJudgeSummary),
+    disagreements
+  };
+}
+
+function parseJudgeSummary(value: unknown): ProjectRepairJudgeSummary | null {
+  if (!isRecord(value)) {
+    return null;
+  }
+
+  if (
+    typeof value.name !== "string" ||
+    typeof value.passedCases !== "number" ||
+    typeof value.failedCases !== "number" ||
+    typeof value.accuracy !== "number"
+  ) {
+    return null;
+  }
+
+  return {
+    name: value.name,
+    alignedCases: value.passedCases,
+    disagreedCases: value.failedCases,
+    baselineAgreement: value.accuracy
+  };
+}
+
+function parseJudgeDisagreement(
+  value: unknown
+): ProjectRepairJudgeDisagreement | null {
+  if (!isRecord(value) || typeof value.caseId !== "string") {
+    return null;
+  }
+
+  if (!isRecord(value.labels)) {
+    return null;
+  }
+
+  return {
+    caseId: value.caseId,
+    labels: Object.fromEntries(
+      Object.entries(value.labels).filter(
+        (entry): entry is [string, string] => typeof entry[1] === "string"
+      )
+    )
+  };
+}
+
 function isRepairAction(
   action: ProjectRepairActionSummary | null
 ): action is ProjectRepairActionSummary {
@@ -237,4 +336,16 @@ function isClaimTrustRow(
   row: ProjectRepairClaimTrustRow | null
 ): row is ProjectRepairClaimTrustRow {
   return row !== null;
+}
+
+function isJudgeSummary(
+  judge: ProjectRepairJudgeSummary | null
+): judge is ProjectRepairJudgeSummary {
+  return judge !== null;
+}
+
+function isJudgeDisagreement(
+  disagreement: ProjectRepairJudgeDisagreement | null
+): disagreement is ProjectRepairJudgeDisagreement {
+  return disagreement !== null;
 }
