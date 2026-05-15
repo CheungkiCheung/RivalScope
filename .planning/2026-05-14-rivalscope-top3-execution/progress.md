@@ -129,6 +129,7 @@
   - Extended Repair Planner so high-severity `untraced_fact` claim findings become deterministic claim-removal actions instead of unresolved warnings.
   - Preserved fact-level `sourceChunkIds` in claim trust summaries so export evidence no longer over-attributes claim-level chunks to every fact.
   - Added JSON/Markdown Evidence Export warnings for cited facts that do not trace to source chunks.
+  - Added `UNTRACED_FACT` to the Prisma review-finding enum and persistence mapper so source-trace failures remain queryable after workflow persistence.
 
 ## Test Results
 | Test | Expected | Actual | Status |
@@ -170,6 +171,8 @@
 | Focused untraced fact workflow tests | Critic flags untraced facts and Repair Planner removes affected claims | `packages/agents/src/workflow-runner.test.ts -t "source chunks"` and `-t "untraced"` passed | pass |
 | RED test for export fact traceability | Export over-attributes a traced chunk to an untraced fact | Failed with `fact_untraced` receiving `chunk_1` and no warning | pass |
 | Focused export traceability tests | JSON/Markdown export shows fact-level source chunks and warnings | `apps/web/lib/report-export.test.ts` and `apps/web/lib/project-claim-trust.test.ts` passed | pass |
+| RED test for persisted untraced findings | Persistence mapper downgrades `untraced_fact` to `UNSUPPORTED_CLAIM` | Failed with saved category `UNSUPPORTED_CLAIM` | pass |
+| Focused persistence category test | `untraced_fact` persists as `UNTRACED_FACT` | `apps/web/lib/analysis-persistence.test.ts -t "persists agent runs"` passed | pass |
 
 ## Error Log
 | Timestamp | Error | Attempt | Resolution |

@@ -367,12 +367,13 @@ describe("persistAnalysisExecution", () => {
           findings: [
             {
               severity: "high",
-              category: "unsupported_claim",
-              message: "Claim needs stronger evidence.",
+              category: "untraced_fact",
+              message: "Claim cites a fact without source chunks.",
               targetType: "claim",
               targetId: "claim_temp_1",
               dimension: "pricing",
-              repairSuggestion: "Attach stronger evidence before publishing."
+              repairSuggestion:
+                "Remove the claim or rerun source ingestion before publishing."
             }
           ]
         },
@@ -568,7 +569,9 @@ describe("persistAnalysisExecution", () => {
         targetType: "claim",
         targetId: "claim_temp_1",
         targetDimension: "pricing",
-        repairSuggestion: "Attach stronger evidence before publishing."
+        category: "UNTRACED_FACT",
+        repairSuggestion:
+          "Remove the claim or rerun source ingestion before publishing."
       })
     ]);
     expect(result.workflow.nodes.find((node) => node.id === "write")?.outputArtifactIds).toEqual([

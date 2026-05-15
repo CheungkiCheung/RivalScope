@@ -484,6 +484,7 @@ function toFindingCategory(category: string): FindingCategory {
   const mapping: Record<string, FindingCategory> = {
     unsupported_claim: "UNSUPPORTED_CLAIM",
     unknown_fact: "UNKNOWN_FACT",
+    untraced_fact: "UNTRACED_FACT",
     low_confidence: "LOW_CONFIDENCE",
     uncited_report_section: "UNCITED_REPORT_SECTION",
     unknown_claim: "UNKNOWN_CLAIM",
