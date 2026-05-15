@@ -125,6 +125,8 @@
   - Updated Analyst normalization so model claims are rejected when cited fact dimensions do not match the claim dimension, while valid same-dimension comparative claims remain allowed.
   - Added source traceability to trajectory eval metrics and scoring.
   - Added `untraced_fact` trajectory findings so facts without source chunks no longer count toward supported claim or required-dimension coverage.
+  - Extended Critic Agent with high-severity `untraced_fact` findings for claims citing facts that lack source chunks.
+  - Extended Repair Planner so high-severity `untraced_fact` claim findings become deterministic claim-removal actions instead of unresolved warnings.
 
 ## Test Results
 | Test | Expected | Actual | Status |
@@ -162,6 +164,8 @@
 | Workflow runner after claim hardening | Full agent workflow suite passes | `packages/agents/src/workflow-runner.test.ts` passed, 36 tests | pass |
 | RED test for trajectory source traceability | Eval counts fact without source chunks as supported | Failed with evidence and dimension coverage still at `1` | pass |
 | Golden eval after source traceability | Golden fixture expected old broken score | Updated expected score from `39` to `54`; `npm run eval:golden` passed | pass |
+| RED test for repair untraced facts | Repair Planner keeps `untraced_fact` as warning | Failed with `keep_with_warning` and no quality delta | pass |
+| Focused untraced fact workflow tests | Critic flags untraced facts and Repair Planner removes affected claims | `packages/agents/src/workflow-runner.test.ts -t "source chunks"` and `-t "untraced"` passed | pass |
 
 ## Error Log
 | Timestamp | Error | Attempt | Resolution |

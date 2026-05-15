@@ -1396,6 +1396,74 @@ describe("critic agent", () => {
       ])
     );
   });
+
+  it("flags claims whose cited facts do not trace to source chunks", async () => {
+    const critic = createCriticAgent();
+
+    const result = await runAgent(critic, {
+      projectId: "project_1",
+      artifacts: [
+        createFactsArtifact([
+          {
+            id: "fact_untraced",
+            competitorId: "cursor",
+            dimension: "pricing",
+            statement: "Cursor has paid plans.",
+            sourceChunkIds: []
+          }
+        ]),
+        createClaimsArtifact([
+          {
+            id: "claim_untraced",
+            projectId: "project_1",
+            dimension: "pricing",
+            statement: "Cursor has paid plans.",
+            factIds: ["fact_untraced"],
+            confidence: 0.84,
+            kind: "single_competitor"
+          }
+        ]),
+        createReportArtifact([
+          {
+            id: "section_summary",
+            title: "Executive Summary",
+            body: "Cursor has paid plans.",
+            claimIds: ["claim_untraced"]
+          }
+        ])
+      ]
+    });
+
+    expect(result.output.kind).toBe("review_findings");
+    expect(result.output.value).toMatchObject({
+      status: "needs_revision",
+      qualityScore: 80
+    });
+    expect(
+      (
+        result.output.value as {
+          findings: Array<{
+            severity: string;
+            category: string;
+            targetType: string;
+            targetId: string;
+            dimension?: string;
+            repairSuggestion: string;
+          }>;
+        }
+      ).findings
+    ).toContainEqual(
+      expect.objectContaining({
+        severity: "high",
+        category: "untraced_fact",
+        targetType: "claim",
+        targetId: "claim_untraced",
+        dimension: "pricing",
+        repairSuggestion:
+          "Remove the claim or rerun source ingestion so every cited fact traces to at least one source chunk."
+      })
+    );
+  });
 });
 
 describe("repair agent", () => {
@@ -1488,6 +1556,52 @@ describe("repair agent", () => {
         }
       ],
       unresolvedGaps: ["developer_experience"]
+    });
+  });
+
+  it("plans claim removal for high-severity untraced fact findings", async () => {
+    const repair = createRepairPlannerAgent();
+
+    const result = await runAgent(repair, {
+      projectId: "project_1",
+      artifacts: [
+        createReviewFindingsArtifact({
+          qualityScore: 80,
+          findings: [
+            {
+              id: "finding_claim_untraced_fact",
+              severity: "high",
+              category: "untraced_fact",
+              message:
+                "Claim claim_untraced cites fact fact_untraced without source chunks.",
+              targetType: "claim",
+              targetId: "claim_untraced",
+              dimension: "pricing",
+              repairSuggestion:
+                "Remove the claim or rerun source ingestion so every cited fact traces to at least one source chunk."
+            }
+          ]
+        })
+      ]
+    });
+
+    expect(result.output.kind).toBe("repair_result");
+    expect(result.output.value).toMatchObject({
+      draftQualityScore: 80,
+      plannedQualityScore: 100,
+      delta: 20,
+      actions: [
+        {
+          id: "repair_remove_claim_untraced",
+          type: "remove_claim_from_report",
+          targetType: "claim",
+          targetId: "claim_untraced",
+          severity: "high",
+          status: "planned",
+          dimension: "pricing"
+        }
+      ],
+      unresolvedGaps: []
     });
   });
 

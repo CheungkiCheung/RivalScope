@@ -51,6 +51,7 @@ export interface ReviewFinding {
   category:
     | "unsupported_claim"
     | "unknown_fact"
+    | "untraced_fact"
     | "low_confidence"
     | "uncited_report_section"
     | "unknown_claim"
@@ -1011,6 +1012,7 @@ export function createCriticAgent(): WorkflowAgent {
         requiredDimensions: string[];
       }>(input.artifacts, "analysis_requirements");
       const factIds = new Set(facts.map((fact) => fact.id));
+      const factById = new Map(facts.map((fact) => [fact.id, fact]));
       const claimIds = new Set(claims.map((claim) => claim.id));
       const findings: ReviewFinding[] = [];
 
@@ -1030,6 +1032,8 @@ export function createCriticAgent(): WorkflowAgent {
         }
 
         for (const factId of claim.factIds) {
+          const fact = factById.get(factId);
+
           if (!factIds.has(factId)) {
             findings.push({
               id: `finding_${claim.id}_unknown_${factId}`,
@@ -1041,6 +1045,18 @@ export function createCriticAgent(): WorkflowAgent {
               dimension: claim.dimension,
               repairSuggestion:
                 "Replace unknown fact references with persisted facts or rerun extraction for this claim."
+            });
+          } else if (fact && fact.sourceChunkIds.length === 0) {
+            findings.push({
+              id: `finding_${claim.id}_untraced_${fact.id}`,
+              severity: "high",
+              category: "untraced_fact",
+              message: `Claim ${claim.id} cites fact ${fact.id} without source chunks.`,
+              targetType: "claim",
+              targetId: claim.id,
+              dimension: claim.dimension,
+              repairSuggestion:
+                "Remove the claim or rerun source ingestion so every cited fact traces to at least one source chunk."
             });
           }
         }
@@ -1550,7 +1566,8 @@ function buildRepairActions(findings: ReviewFinding[]): RepairAction[] {
       finding.severity === "high" &&
       finding.targetType === "claim" &&
       (finding.category === "unsupported_claim" ||
-        finding.category === "unknown_fact")
+        finding.category === "unknown_fact" ||
+        finding.category === "untraced_fact")
     ) {
       return {
         id: `repair_remove_${finding.targetId}`,
