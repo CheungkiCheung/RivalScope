@@ -799,7 +799,7 @@ The next implementation milestone is Phase 6:
 Delivery And Demo Hardening
 ```
 
-Current sub-slice: routed research synthesis policy gates Writer Agent claim inclusion, Markdown/JSON exports now include an evidence appendix, and `npm run demo:seed` creates an idempotent offline Cursor/Codex/Trae demo project with `[demo:repair_lift]`. The current priority is non-UI core hardening: source ingestion now searches by competitor × dimension with URL dedupe, routed research excludes claims with incomplete fact citation chains from synthesis inclusion, and model claim normalization rejects mixed-dimension citations or malformed single-competitor claims before report writing.
+Current sub-slice: routed research synthesis policy gates Writer Agent claim inclusion, Markdown/JSON exports now include an evidence appendix, and `npm run demo:seed` creates an idempotent offline Cursor/Codex/Trae demo project with `[demo:repair_lift]`. The current priority is non-UI core hardening: source ingestion now searches by competitor × dimension with URL dedupe, routed research excludes claims with incomplete fact citation chains from synthesis inclusion, model claim normalization rejects mixed-dimension citations or malformed single-competitor claims before report writing, and trajectory eval now penalizes facts that do not trace to source chunks.
 
 ## Stable Demo Seed
 

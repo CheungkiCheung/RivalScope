@@ -85,7 +85,7 @@
     "id": "agentic-devtools-broken",
     "name": "Agentic devtools broken evidence chain",
     "minScore": 20,
-    "expectedScore": 39,
+    "expectedScore": 54,
     "expectedFindingCategories": [
       "missing_dimension",
       "unknown_fact",

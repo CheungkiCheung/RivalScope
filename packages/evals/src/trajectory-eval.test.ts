@@ -64,9 +64,10 @@ describe("evaluateEvidenceTrajectory", () => {
       factCount: 2,
       evidenceCoverage: 1 / 3,
       citationValidity: 1 / 2,
-      requiredDimensionCoverage: 1 / 3
+      requiredDimensionCoverage: 1 / 3,
+      sourceTraceability: 1
     });
-    expect(result.score).toBe(39);
+    expect(result.score).toBe(54);
     expect(result.findings).toEqual([
       {
         severity: "high",
@@ -153,7 +154,7 @@ describe("evaluateEvidenceTrajectory", () => {
     });
 
     expect(result.metrics.citationValidity).toBe(0);
-    expect(result.score).toBe(33);
+    expect(result.score).toBe(25);
   });
 
   it("returns perfect trajectory scores for fully cited required dimensions", () => {
@@ -176,9 +177,51 @@ describe("evaluateEvidenceTrajectory", () => {
     expect(result.metrics).toMatchObject({
       evidenceCoverage: 1,
       citationValidity: 1,
-      requiredDimensionCoverage: 1
+      requiredDimensionCoverage: 1,
+      sourceTraceability: 1
     });
     expect(result.score).toBe(100);
     expect(result.findings).toEqual([]);
+  });
+
+  it("penalizes claims whose facts do not trace to source chunks", () => {
+    const result = evaluateEvidenceTrajectory({
+      requiredDimensions: ["pricing"],
+      facts: [
+        {
+          ...cursorFact,
+          sourceChunkIds: []
+        }
+      ],
+      claims: [
+        {
+          id: "claim_1",
+          projectId: "project_1",
+          dimension: "pricing",
+          statement: "Cursor monetizes through paid plans.",
+          factIds: ["fact_1"],
+          confidence: 0.82,
+          kind: "single_competitor"
+        }
+      ]
+    });
+
+    expect(result.metrics).toMatchObject({
+      evidenceCoverage: 0,
+      citationValidity: 1,
+      requiredDimensionCoverage: 0,
+      sourceTraceability: 0
+    });
+    expect(result.score).toBe(25);
+    expect(result.findings).toContainEqual({
+      severity: "high",
+      category: "untraced_fact",
+      message: "Claim claim_1 cites fact fact_1 without source chunks."
+    });
+    expect(result.findings).toContainEqual({
+      severity: "medium",
+      category: "missing_dimension",
+      message: "Missing required dimension pricing."
+    });
   });
 });

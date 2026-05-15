@@ -115,7 +115,7 @@ describe("runGoldenEvaluations", () => {
     expect(summary.results[0]).toMatchObject({
       passed: false,
       failures: [
-        "score 33 did not match expected score 100",
+        "score 25 did not match expected score 100",
         "finding categories missing [unknown_fact] extra [unsupported_claim]"
       ]
     });

@@ -123,6 +123,8 @@
   - Updated source ingestion so each competitor/dimension pair gets its own search request and duplicate URLs are skipped before fetch/chunk persistence.
   - Added TDD coverage proving model-synthesized claims cannot mix dimensions or misuse `single_competitor` when citing facts from multiple competitors.
   - Updated Analyst normalization so model claims are rejected when cited fact dimensions do not match the claim dimension, while valid same-dimension comparative claims remain allowed.
+  - Added source traceability to trajectory eval metrics and scoring.
+  - Added `untraced_fact` trajectory findings so facts without source chunks no longer count toward supported claim or required-dimension coverage.
 
 ## Test Results
 | Test | Expected | Actual | Status |
@@ -158,6 +160,8 @@
 | RED tests for model claim schema hardening | Analyst accepts mixed-competitor single claim and mixed-dimension claim | Failed because model claims were accepted before validation | pass |
 | Focused analyst hardening tests | Invalid model claims rejected; valid comparative claim allowed | `packages/agents/src/workflow-runner.test.ts -t "analyst agent"` passed | pass |
 | Workflow runner after claim hardening | Full agent workflow suite passes | `packages/agents/src/workflow-runner.test.ts` passed, 36 tests | pass |
+| RED test for trajectory source traceability | Eval counts fact without source chunks as supported | Failed with evidence and dimension coverage still at `1` | pass |
+| Golden eval after source traceability | Golden fixture expected old broken score | Updated expected score from `39` to `54`; `npm run eval:golden` passed | pass |
 
 ## Error Log
 | Timestamp | Error | Attempt | Resolution |
