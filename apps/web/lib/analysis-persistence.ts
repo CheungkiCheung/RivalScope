@@ -347,6 +347,7 @@ async function persistIntelligence(
       repairSuggestion?: string;
     }>;
   }>(artifacts, "review_findings");
+  validateClaimDimensions(factsArtifact, claimsArtifact);
 
   const competitorByKey = new Map(
     competitors.flatMap((competitor) => [
@@ -460,6 +461,48 @@ function findArtifact<T>(artifacts: Artifact[], kind: string): T {
   }
 
   return artifact.value as T;
+}
+
+function validateClaimDimensions(
+  factsArtifact: {
+    facts: Array<{
+      id: string;
+      dimension: string;
+    }>;
+  },
+  claimsArtifact: {
+    claims: Array<{
+      id: string;
+      dimension: string;
+      factIds: string[];
+    }>;
+  }
+) {
+  for (const claim of claimsArtifact.claims) {
+    const sourceClaimDimensions = new Set(
+      claim.factIds
+        .map((factId) => factsArtifact.facts.find((fact) => fact.id === factId))
+        .filter(
+          (fact): fact is (typeof factsArtifact)["facts"][number] =>
+            fact !== undefined
+        )
+        .map((fact) => fact.dimension)
+    );
+
+    if (
+      sourceClaimDimensions.size > 1 ||
+      !sourceClaimDimensions.has(claim.dimension)
+    ) {
+      const offendingFactIds = claim.factIds.filter((factId) => {
+        const fact = factsArtifact.facts.find((candidate) => candidate.id === factId);
+        return fact !== undefined && fact.dimension !== claim.dimension;
+      });
+
+      throw new Error(
+        `Claim ${claim.id} cites facts outside its dimension: ${offendingFactIds.join(", ")}.`
+      );
+    }
+  }
 }
 
 function toClaimKind(kind: string): ClaimKind {

@@ -531,6 +531,10 @@ export class IntelligenceRepository {
   }
 
   async createClaim(input: CreateClaimInput) {
+    if (input.factIds.length === 0) {
+      throw new Error("Cannot create claim without fact ids.");
+    }
+
     return this.db.claim.create({
       data: {
         projectId: input.projectId,

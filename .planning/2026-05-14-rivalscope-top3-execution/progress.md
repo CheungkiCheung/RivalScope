@@ -131,6 +131,7 @@
   - Added JSON/Markdown Evidence Export warnings for cited facts that do not trace to source chunks.
   - Added `UNTRACED_FACT` to the Prisma review-finding enum and persistence mapper so source-trace failures remain queryable after workflow persistence.
   - Added fail-fast persistence guards so facts without source chunks cannot be written through either analysis persistence or `IntelligenceRepository.createFact`.
+  - Added fail-fast claim-dimension validation at the analysis persistence boundary so mixed-dimension claims are rejected before any intelligence rows are written.
 
 ## Test Results
 | Test | Expected | Actual | Status |

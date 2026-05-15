@@ -121,7 +121,11 @@ describe("persistAnalysisExecution", () => {
           }))
       },
       intelligence: {
-        createFact: vi.fn(),
+        createFact: vi
+          .fn()
+          .mockImplementation(async (input: { competitorId: string }) => ({
+            id: `db_fact_${input.competitorId}`
+          })),
         createClaim: vi.fn(),
         createReport: vi.fn(),
         createReviewFindings: vi.fn()
@@ -659,7 +663,11 @@ describe("persistAnalysisExecution", () => {
           )
       },
       intelligence: {
-        createFact: vi.fn(),
+        createFact: vi
+          .fn()
+          .mockImplementation(async (input: { competitorId: string }) => ({
+            id: `db_fact_${input.competitorId}`
+          })),
         createClaim: vi.fn(),
         createReport: vi.fn(),
         createReviewFindings: vi.fn()
@@ -758,7 +766,7 @@ describe("persistAnalysisExecution", () => {
           agentName: "analyze",
           dependsOn: ["extract"],
           status: "succeeded",
-          inputArtifactIds: [],
+          inputArtifactIds: ["artifact_temp_facts"],
           outputArtifactIds: ["artifact_temp_claims"],
           retryCount: 0,
           maxRetries: 1
@@ -769,7 +777,7 @@ describe("persistAnalysisExecution", () => {
           agentName: "write",
           dependsOn: ["analyze"],
           status: "succeeded",
-          inputArtifactIds: [],
+          inputArtifactIds: ["artifact_temp_claims"],
           outputArtifactIds: ["artifact_temp_report"],
           retryCount: 0,
           maxRetries: 1
@@ -780,7 +788,7 @@ describe("persistAnalysisExecution", () => {
           agentName: "critique",
           dependsOn: ["write"],
           status: "succeeded",
-          inputArtifactIds: [],
+          inputArtifactIds: ["artifact_temp_report"],
           outputArtifactIds: ["artifact_temp_findings"],
           retryCount: 0,
           maxRetries: 1
@@ -874,7 +882,11 @@ describe("persistAnalysisExecution", () => {
           )
       },
       intelligence: {
-        createFact: vi.fn(),
+        createFact: vi
+          .fn()
+          .mockImplementation(async (input: { competitorId: string }) => ({
+            id: `db_fact_${input.competitorId}`
+          })),
         createClaim: vi.fn(),
         createReport: vi.fn(),
         createReviewFindings: vi.fn()
@@ -903,6 +915,190 @@ describe("persistAnalysisExecution", () => {
       "Fact fact_untraced cannot be persisted without source chunks."
     );
     expect(repository.intelligence.createFact).not.toHaveBeenCalled();
+    expect(repository.intelligence.createReport).not.toHaveBeenCalled();
+  });
+
+  it("rejects claims that mix fact dimensions before writing intelligence rows", async () => {
+    const workflow: Workflow = {
+      id: "workflow_project_1",
+      projectId: "project_1",
+      nodes: [
+        {
+          id: "extract",
+          type: "agent",
+          agentName: "extract",
+          dependsOn: [],
+          status: "succeeded",
+          inputArtifactIds: ["artifact_temp_source"],
+          outputArtifactIds: ["artifact_temp_facts"],
+          retryCount: 0,
+          maxRetries: 1
+        },
+        {
+          id: "analyze",
+          type: "agent",
+          agentName: "analyze",
+          dependsOn: ["extract"],
+          status: "succeeded",
+          inputArtifactIds: [],
+          outputArtifactIds: ["artifact_temp_claims"],
+          retryCount: 0,
+          maxRetries: 1
+        },
+        {
+          id: "write",
+          type: "agent",
+          agentName: "write",
+          dependsOn: ["analyze"],
+          status: "succeeded",
+          inputArtifactIds: [],
+          outputArtifactIds: ["artifact_temp_report"],
+          retryCount: 0,
+          maxRetries: 1
+        },
+        {
+          id: "critique",
+          type: "agent",
+          agentName: "critique",
+          dependsOn: ["write"],
+          status: "succeeded",
+          inputArtifactIds: [],
+          outputArtifactIds: ["artifact_temp_findings"],
+          retryCount: 0,
+          maxRetries: 1
+        }
+      ]
+    };
+    const artifacts: Artifact[] = [
+      createArtifact(
+        "artifact_temp_facts",
+        "facts",
+        {
+          projectId: "project_1",
+          facts: [
+            {
+              id: "fact_pricing",
+              projectId: "project_1",
+              competitorId: "Cursor",
+              dimension: "pricing",
+              statement: "Cursor has a pricing fact.",
+              sourceChunkIds: ["chunk_1"],
+              confidence: 0.9
+            },
+            {
+              id: "fact_positioning",
+              projectId: "project_1",
+              competitorId: "Cursor",
+              dimension: "positioning",
+              statement: "Cursor has a positioning fact.",
+              sourceChunkIds: ["chunk_2"],
+              confidence: 0.9
+            }
+          ]
+        },
+        "2026-05-11T00:00:00.000Z"
+      ),
+      createArtifact(
+        "artifact_temp_claims",
+        "claims",
+        {
+          projectId: "project_1",
+          claims: [
+            {
+              id: "claim_mixed_dimensions",
+              projectId: "project_1",
+              dimension: "pricing",
+              statement: "Cursor has a mixed-dimension claim.",
+              factIds: ["fact_pricing", "fact_positioning"],
+              confidence: 0.7,
+              kind: "comparative"
+            }
+          ]
+        },
+        "2026-05-11T00:00:01.000Z"
+      ),
+      createArtifact(
+        "artifact_temp_report",
+        "report",
+        {
+          projectId: "project_1",
+          title: "Competitive Intelligence Report",
+          sections: [
+            {
+              id: "section_summary",
+              title: "Executive Summary",
+              body: "Cursor has a mixed-dimension claim.",
+              claimIds: ["claim_mixed_dimensions"]
+            }
+          ]
+        },
+        "2026-05-11T00:00:02.000Z"
+      ),
+      createArtifact(
+        "artifact_temp_findings",
+        "review_findings",
+        {
+          projectId: "project_1",
+          status: "needs_revision",
+          qualityScore: 80,
+          findings: []
+        },
+        "2026-05-11T00:00:03.000Z"
+      )
+    ];
+    const repository = {
+      workflow: {
+        createAgentRun: vi.fn().mockResolvedValue({ id: "db_run_extract" }),
+        createToolCalls: vi.fn().mockResolvedValue({ count: 0 }),
+        createModelCalls: vi.fn().mockResolvedValue({ count: 0 }),
+        updateNodeStatuses: vi.fn().mockResolvedValue([])
+      },
+      artifact: {
+        create: vi
+          .fn()
+          .mockImplementation(
+            async (input: { kind: string; value: unknown }) => ({
+              id: `db_artifact_${String(input.kind)}`,
+              kind: input.kind,
+              value: input.value
+            })
+          )
+      },
+      intelligence: {
+        createFact: vi
+          .fn()
+          .mockImplementation(async (input: { competitorId: string }) => ({
+            id: `db_fact_${input.competitorId}`
+          })),
+        createClaim: vi.fn(),
+        createReport: vi.fn(),
+        createReviewFindings: vi.fn()
+      }
+    };
+
+    await expect(
+      persistAnalysisExecution({
+        projectId: "project_1",
+        competitors: [{ id: "competitor_cursor", name: "Cursor" }],
+        workflowRecord: {
+          id: "workflow_db_1",
+          nodes: [
+            { id: "db_node_extract", nodeKey: "extract" },
+            { id: "db_node_analyze", nodeKey: "analyze" },
+            { id: "db_node_write", nodeKey: "write" },
+            { id: "db_node_critique", nodeKey: "critique" }
+          ]
+        },
+        workflow,
+        agentRuns: [],
+        artifacts,
+        repositories: repository
+      })
+    ).rejects.toThrow(
+      "Claim claim_mixed_dimensions cites facts outside its dimension: fact_positioning."
+    );
+    expect(repository.intelligence.createFact).not.toHaveBeenCalled();
+    expect(repository.intelligence.createClaim).not.toHaveBeenCalled();
     expect(repository.intelligence.createReport).not.toHaveBeenCalled();
   });
 });
