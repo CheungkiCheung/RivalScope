@@ -359,6 +359,12 @@ async function persistIntelligence(
   for (const fact of factsArtifact.facts) {
     const competitorId = competitorByKey.get(fact.competitorId.toLowerCase());
 
+    if (fact.sourceChunkIds.length === 0) {
+      throw new Error(
+        `Fact ${fact.id} cannot be persisted without source chunks.`
+      );
+    }
+
     if (!competitorId) {
       throw new Error(
         `Fact ${fact.id} references unknown competitor ${fact.competitorId}`

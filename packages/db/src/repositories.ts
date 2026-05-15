@@ -509,6 +509,10 @@ export class IntelligenceRepository {
   constructor(private readonly db: PrismaClient) {}
 
   async createFact(input: CreateFactInput) {
+    if (input.chunkIds.length === 0) {
+      throw new Error("Cannot create fact without source chunk ids.");
+    }
+
     return this.db.fact.create({
       data: {
         projectId: input.projectId,

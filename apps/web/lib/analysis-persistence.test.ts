@@ -735,4 +735,174 @@ describe("persistAnalysisExecution", () => {
     expect(repository.intelligence.createReport).not.toHaveBeenCalled();
     expect(result.report).toBeUndefined();
   });
+
+  it("rejects persisted facts that do not cite source chunks before writing intelligence rows", async () => {
+    const workflow: Workflow = {
+      id: "workflow_project_1",
+      projectId: "project_1",
+      nodes: [
+        {
+          id: "extract",
+          type: "agent",
+          agentName: "extract",
+          dependsOn: [],
+          status: "succeeded",
+          inputArtifactIds: ["artifact_temp_source"],
+          outputArtifactIds: ["artifact_temp_facts"],
+          retryCount: 0,
+          maxRetries: 1
+        },
+        {
+          id: "analyze",
+          type: "agent",
+          agentName: "analyze",
+          dependsOn: ["extract"],
+          status: "succeeded",
+          inputArtifactIds: [],
+          outputArtifactIds: ["artifact_temp_claims"],
+          retryCount: 0,
+          maxRetries: 1
+        },
+        {
+          id: "write",
+          type: "agent",
+          agentName: "write",
+          dependsOn: ["analyze"],
+          status: "succeeded",
+          inputArtifactIds: [],
+          outputArtifactIds: ["artifact_temp_report"],
+          retryCount: 0,
+          maxRetries: 1
+        },
+        {
+          id: "critique",
+          type: "agent",
+          agentName: "critique",
+          dependsOn: ["write"],
+          status: "succeeded",
+          inputArtifactIds: [],
+          outputArtifactIds: ["artifact_temp_findings"],
+          retryCount: 0,
+          maxRetries: 1
+        }
+      ]
+    };
+    const artifacts: Artifact[] = [
+      createArtifact(
+        "artifact_temp_facts",
+        "facts",
+        {
+          projectId: "project_1",
+          facts: [
+            {
+              id: "fact_untraced",
+              projectId: "project_1",
+              competitorId: "Cursor",
+              dimension: "pricing",
+              statement: "Cursor has an untraced pricing claim.",
+              sourceChunkIds: [],
+              confidence: 0.72
+            }
+          ]
+        },
+        "2026-05-11T00:00:00.000Z"
+      ),
+      createArtifact(
+        "artifact_temp_claims",
+        "claims",
+        {
+          projectId: "project_1",
+          claims: [
+            {
+              id: "claim_untraced",
+              projectId: "project_1",
+              dimension: "pricing",
+              statement: "Cursor has an untraced pricing claim.",
+              factIds: ["fact_untraced"],
+              confidence: 0.7,
+              kind: "single_competitor"
+            }
+          ]
+        },
+        "2026-05-11T00:00:01.000Z"
+      ),
+      createArtifact(
+        "artifact_temp_report",
+        "report",
+        {
+          projectId: "project_1",
+          title: "Competitive Intelligence Report",
+          sections: [
+            {
+              id: "section_summary",
+              title: "Executive Summary",
+              body: "Cursor has an untraced pricing claim.",
+              claimIds: ["claim_untraced"]
+            }
+          ]
+        },
+        "2026-05-11T00:00:02.000Z"
+      ),
+      createArtifact(
+        "artifact_temp_findings",
+        "review_findings",
+        {
+          projectId: "project_1",
+          status: "needs_revision",
+          qualityScore: 80,
+          findings: []
+        },
+        "2026-05-11T00:00:03.000Z"
+      )
+    ];
+    const repository = {
+      workflow: {
+        createAgentRun: vi.fn().mockResolvedValue({ id: "db_run_extract" }),
+        createToolCalls: vi.fn().mockResolvedValue({ count: 0 }),
+        createModelCalls: vi.fn().mockResolvedValue({ count: 0 }),
+        updateNodeStatuses: vi.fn().mockResolvedValue([])
+      },
+      artifact: {
+        create: vi
+          .fn()
+          .mockImplementation(
+            async (input: { kind: string; value: unknown }) => ({
+              id: `db_artifact_${String(input.kind)}`,
+              kind: input.kind,
+              value: input.value
+            })
+          )
+      },
+      intelligence: {
+        createFact: vi.fn(),
+        createClaim: vi.fn(),
+        createReport: vi.fn(),
+        createReviewFindings: vi.fn()
+      }
+    };
+
+    await expect(
+      persistAnalysisExecution({
+        projectId: "project_1",
+        competitors: [{ id: "competitor_cursor", name: "Cursor" }],
+        workflowRecord: {
+          id: "workflow_db_1",
+          nodes: [
+            { id: "db_node_extract", nodeKey: "extract" },
+            { id: "db_node_analyze", nodeKey: "analyze" },
+            { id: "db_node_write", nodeKey: "write" },
+            { id: "db_node_critique", nodeKey: "critique" }
+          ]
+        },
+        workflow,
+        agentRuns: [],
+        artifacts,
+        repositories: repository
+      })
+    ).rejects.toThrow(
+      "Fact fact_untraced cannot be persisted without source chunks."
+    );
+    expect(repository.intelligence.createFact).not.toHaveBeenCalled();
+    expect(repository.intelligence.createReport).not.toHaveBeenCalled();
+  });
 });

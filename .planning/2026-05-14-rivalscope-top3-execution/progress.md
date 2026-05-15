@@ -130,6 +130,7 @@
   - Preserved fact-level `sourceChunkIds` in claim trust summaries so export evidence no longer over-attributes claim-level chunks to every fact.
   - Added JSON/Markdown Evidence Export warnings for cited facts that do not trace to source chunks.
   - Added `UNTRACED_FACT` to the Prisma review-finding enum and persistence mapper so source-trace failures remain queryable after workflow persistence.
+  - Added fail-fast persistence guards so facts without source chunks cannot be written through either analysis persistence or `IntelligenceRepository.createFact`.
 
 ## Test Results
 | Test | Expected | Actual | Status |
@@ -173,6 +174,8 @@
 | Focused export traceability tests | JSON/Markdown export shows fact-level source chunks and warnings | `apps/web/lib/report-export.test.ts` and `apps/web/lib/project-claim-trust.test.ts` passed | pass |
 | RED test for persisted untraced findings | Persistence mapper downgrades `untraced_fact` to `UNSUPPORTED_CLAIM` | Failed with saved category `UNSUPPORTED_CLAIM` | pass |
 | Focused persistence category test | `untraced_fact` persists as `UNTRACED_FACT` | `apps/web/lib/analysis-persistence.test.ts -t "persists agent runs"` passed | pass |
+| RED tests for persistence source chunk gates | Facts without source chunks reach repository/Prisma | Failed before fail-fast guards | pass |
+| Focused persistence source chunk gate tests | Empty source chunk facts rejected before DB writes | `apps/web/lib/analysis-persistence.test.ts` and `packages/db/src/repositories.test.ts` passed | pass |
 
 ## Error Log
 | Timestamp | Error | Attempt | Resolution |
