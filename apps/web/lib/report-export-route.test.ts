@@ -15,7 +15,8 @@ describe("buildReportExportResponse", () => {
         excludedClaimIds: [],
         evidenceGapIds: []
       },
-      evidenceAppendix: []
+      evidenceAppendix: [],
+      warnings: []
     },
     markdown: "# AI Coding Tools\n\nNo report has been generated yet."
   };

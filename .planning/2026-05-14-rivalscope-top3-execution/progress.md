@@ -127,6 +127,8 @@
   - Added `untraced_fact` trajectory findings so facts without source chunks no longer count toward supported claim or required-dimension coverage.
   - Extended Critic Agent with high-severity `untraced_fact` findings for claims citing facts that lack source chunks.
   - Extended Repair Planner so high-severity `untraced_fact` claim findings become deterministic claim-removal actions instead of unresolved warnings.
+  - Preserved fact-level `sourceChunkIds` in claim trust summaries so export evidence no longer over-attributes claim-level chunks to every fact.
+  - Added JSON/Markdown Evidence Export warnings for cited facts that do not trace to source chunks.
 
 ## Test Results
 | Test | Expected | Actual | Status |
@@ -166,6 +168,8 @@
 | Golden eval after source traceability | Golden fixture expected old broken score | Updated expected score from `39` to `54`; `npm run eval:golden` passed | pass |
 | RED test for repair untraced facts | Repair Planner keeps `untraced_fact` as warning | Failed with `keep_with_warning` and no quality delta | pass |
 | Focused untraced fact workflow tests | Critic flags untraced facts and Repair Planner removes affected claims | `packages/agents/src/workflow-runner.test.ts -t "source chunks"` and `-t "untraced"` passed | pass |
+| RED test for export fact traceability | Export over-attributes a traced chunk to an untraced fact | Failed with `fact_untraced` receiving `chunk_1` and no warning | pass |
+| Focused export traceability tests | JSON/Markdown export shows fact-level source chunks and warnings | `apps/web/lib/report-export.test.ts` and `apps/web/lib/project-claim-trust.test.ts` passed | pass |
 
 ## Error Log
 | Timestamp | Error | Attempt | Resolution |

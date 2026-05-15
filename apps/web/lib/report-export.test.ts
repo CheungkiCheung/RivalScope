@@ -89,7 +89,8 @@ describe("buildReportExport", () => {
                 statement: "Cursor offers individual Pro and Team plans.",
                 dimension: "pricing",
                 confidence: 0.91,
-                competitorName: "Cursor"
+                competitorName: "Cursor",
+                sourceChunkIds: ["chunk_1"]
               }
             ],
             chunks: [
@@ -181,6 +182,150 @@ describe("buildReportExport", () => {
     expect(result.markdown).toContain("Source: Cursor pricing - https://cursor.com/pricing");
     expect(result.markdown).toContain("## Evidence Gaps");
     expect(result.markdown).toContain("Codex / pricing: No extracted facts matched this competitor and dimension.");
+  });
+
+  it("exports fact-level warnings when cited facts do not trace to source chunks", () => {
+    const result = buildReportExport({
+      project: {
+        id: "project_1",
+        name: "AI Coding Tools",
+        description: null
+      },
+      report: {
+        id: "report_1",
+        title: "Competitive Intelligence Report",
+        status: "DRAFT",
+        qualityScore: 80,
+        sections: [
+          {
+            id: "section_summary",
+            title: "Executive Summary",
+            body: "Cursor offers paid plans and has undocumented benchmark claims.",
+            claims: [
+              {
+                claimId: "claim_1",
+                claim: {
+                  id: "claim_1",
+                  statement:
+                    "Cursor offers paid plans and has undocumented benchmark claims.",
+                  dimension: "pricing",
+                  confidence: 0.72,
+                  kind: "SINGLE_COMPETITOR",
+                  facts: []
+                }
+              }
+            ]
+          }
+        ]
+      },
+      claimTrust: {
+        status: "ready",
+        averageScore: 68,
+        nodes: [
+          {
+            claimId: "claim_1",
+            statement:
+              "Cursor offers paid plans and has undocumented benchmark claims.",
+            dimension: "pricing",
+            sectionId: "section_summary",
+            sectionTitle: "Executive Summary",
+            score: 68,
+            riskLevel: "medium",
+            metrics: {
+              citationValidity: 1,
+              evidenceStrength: 0.82,
+              sourceTraceability: 0.5,
+              factConfidence: 0.82,
+              sourceDiversity: 0.5,
+              semanticSupport: 0.7,
+              sourceAuthority: 0.8,
+              citedFactCount: 2,
+              validFactCount: 2,
+              sourceChunkCount: 1,
+              sourceCount: 1
+            },
+            penalties: [],
+            reasons: ["One cited fact is missing source chunks."],
+            facts: [
+              {
+                id: "fact_traced",
+                statement: "Cursor offers paid plans.",
+                dimension: "pricing",
+                confidence: 0.91,
+                competitorName: "Cursor",
+                sourceChunkIds: ["chunk_1"]
+              },
+              {
+                id: "fact_untraced",
+                statement: "Cursor has benchmark-leading pricing.",
+                dimension: "pricing",
+                confidence: 0.73,
+                competitorName: "Cursor",
+                sourceChunkIds: []
+              }
+            ],
+            chunks: [
+              {
+                id: "chunk_1",
+                text: "Cursor offers paid plans.",
+                sourceId: "source_1"
+              }
+            ],
+            sources: [
+              {
+                id: "source_1",
+                title: "Cursor pricing",
+                uri: "https://cursor.com/pricing"
+              }
+            ]
+          }
+        ]
+      },
+      research: {
+        status: "complete",
+        totalBranches: 1,
+        succeededBranches: 1,
+        partialBranches: 0,
+        failedBranches: 0,
+        evidenceGaps: [],
+        branchResults: [],
+        includedClaimIds: ["claim_1"],
+        excludedClaimIds: []
+      }
+    });
+
+    expect(result.json.evidenceAppendix).toMatchObject([
+      {
+        claimId: "claim_1",
+        warnings: [
+          {
+            code: "missing_source_chunk",
+            factId: "fact_untraced",
+            message: "Fact fact_untraced has no source chunks."
+          }
+        ],
+        facts: [
+          {
+            id: "fact_traced",
+            sourceChunks: [
+              {
+                id: "chunk_1"
+              }
+            ]
+          },
+          {
+            id: "fact_untraced",
+            sourceChunks: [],
+            traceability: "missing_source_chunk"
+          }
+        ]
+      }
+    ]);
+    expect(result.markdown).toContain("## Evidence Warnings");
+    expect(result.markdown).toContain(
+      "- Claim `claim_1`, Fact `fact_untraced`: Fact fact_untraced has no source chunks."
+    );
+    expect(result.markdown).not.toContain("Fact `fact_untraced`: Cursor has benchmark-leading pricing.\n  - Chunk `chunk_1`");
   });
 
   it("returns empty export placeholders when no report exists", () => {

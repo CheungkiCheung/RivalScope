@@ -81,6 +81,7 @@ export interface ProjectClaimTrustNode {
     dimension: string;
     confidence: number;
     competitorName: string;
+    sourceChunkIds: string[];
   }>;
   chunks: Array<{
     id: string;
@@ -191,7 +192,8 @@ function buildNode(input: {
       statement: fact.statement,
       dimension: fact.dimension,
       confidence: fact.confidence,
-      competitorName: fact.competitor.name
+      competitorName: fact.competitor.name,
+      sourceChunkIds: fact.chunks.map((chunkLink) => chunkLink.chunkId)
     })),
     chunks: trustedChunks.map((chunk) => ({
       id: chunk.id,

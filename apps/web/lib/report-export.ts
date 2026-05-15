@@ -85,6 +85,7 @@ export interface ReportExportJson {
     evidenceGapIds: string[];
   };
   evidenceAppendix: ReportEvidenceAppendixEntry[];
+  warnings: ReportExportWarning[];
 }
 
 export interface ReportEvidenceAppendixEntry {
@@ -93,12 +94,14 @@ export interface ReportEvidenceAppendixEntry {
   dimension: string;
   trustScore: number;
   riskLevel: string;
+  warnings: ReportExportWarning[];
   facts: Array<{
     id: string;
     statement: string;
     dimension: string;
     confidence: number;
     competitorName: string;
+    traceability: "traced" | "missing_source_chunk";
     sourceChunks: Array<{
       id: string;
       text: string;
@@ -111,8 +114,16 @@ export interface ReportEvidenceAppendixEntry {
   }>;
 }
 
+export interface ReportExportWarning {
+  code: "missing_source_chunk";
+  claimId: string;
+  factId: string;
+  message: string;
+}
+
 export function buildReportExport(input: BuildReportExportInput): ReportExport {
   const evidenceAppendix = buildEvidenceAppendix(input.claimTrust);
+  const warnings = evidenceAppendix.flatMap((entry) => entry.warnings);
   const json: ReportExportJson = {
     project: {
       id: input.project.id,
@@ -138,7 +149,8 @@ export function buildReportExport(input: BuildReportExportInput): ReportExport {
       excludedClaimIds: input.research.excludedClaimIds,
       evidenceGapIds: input.research.evidenceGaps.map((gap) => gap.id)
     },
-    evidenceAppendix
+    evidenceAppendix,
+    warnings
   };
 
   return {
@@ -147,7 +159,8 @@ export function buildReportExport(input: BuildReportExportInput): ReportExport {
       project: input.project,
       report: input.report,
       research: input.research,
-      evidenceAppendix
+      evidenceAppendix,
+      warnings
     })
   };
 }
@@ -159,19 +172,11 @@ function buildEvidenceAppendix(
     const chunksById = new Map(node.chunks.map((chunk) => [chunk.id, chunk]));
     const sourcesById = new Map(node.sources.map((source) => [source.id, source]));
 
-    return {
-      claimId: node.claimId,
-      statement: node.statement,
-      dimension: node.dimension,
-      trustScore: node.score,
-      riskLevel: node.riskLevel,
-      facts: node.facts.map((fact) => ({
-        id: fact.id,
-        statement: fact.statement,
-        dimension: fact.dimension,
-        confidence: fact.confidence,
-        competitorName: fact.competitorName,
-        sourceChunks: node.chunks.map((chunk) => {
+    const facts = node.facts.map((fact) => {
+      const sourceChunkIds = new Set(fact.sourceChunkIds);
+      const sourceChunks = node.chunks
+        .filter((chunk) => sourceChunkIds.has(chunk.id))
+        .map((chunk) => {
           const trustedChunk = chunksById.get(chunk.id) ?? chunk;
           const source = sourcesById.get(trustedChunk.sourceId);
 
@@ -186,8 +191,40 @@ function buildEvidenceAppendix(
                 }
               : null
           };
-        })
-      }))
+        });
+
+      const traceability =
+        sourceChunks.length === 0
+          ? ("missing_source_chunk" as const)
+          : ("traced" as const);
+
+      return {
+        id: fact.id,
+        statement: fact.statement,
+        dimension: fact.dimension,
+        confidence: fact.confidence,
+        competitorName: fact.competitorName,
+        traceability,
+        sourceChunks
+      };
+    });
+    const warnings = facts
+      .filter((fact) => fact.traceability === "missing_source_chunk")
+      .map((fact) => ({
+        code: "missing_source_chunk" as const,
+        claimId: node.claimId,
+        factId: fact.id,
+        message: `Fact ${fact.id} has no source chunks.`
+      }));
+
+    return {
+      claimId: node.claimId,
+      statement: node.statement,
+      dimension: node.dimension,
+      trustScore: node.score,
+      riskLevel: node.riskLevel,
+      warnings,
+      facts
     };
   });
 }
@@ -197,6 +234,7 @@ function buildMarkdown(input: {
   report: ProjectExportReport | null;
   research: ProjectResearchSummary;
   evidenceAppendix: ReportEvidenceAppendixEntry[];
+  warnings: ReportExportWarning[];
 }): string {
   const lines: string[] = [];
   const title = input.report?.title ?? input.project.name;
@@ -236,6 +274,19 @@ function buildMarkdown(input: {
 
     for (const gap of input.research.evidenceGaps) {
       lines.push(`- ${gap.competitorName} / ${gap.dimension}: ${gap.reason}`);
+    }
+
+    lines.push("");
+  }
+
+  if (input.warnings.length > 0) {
+    lines.push("## Evidence Warnings");
+    lines.push("");
+
+    for (const warning of input.warnings) {
+      lines.push(
+        `- Claim \`${warning.claimId}\`, Fact \`${warning.factId}\`: ${warning.message}`
+      );
     }
 
     lines.push("");

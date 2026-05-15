@@ -114,11 +114,13 @@ describe("buildProjectClaimTrustSummary", () => {
       facts: [
         {
           id: "fact_1",
-          competitorName: "Cursor"
+          competitorName: "Cursor",
+          sourceChunkIds: ["chunk_1"]
         },
         {
           id: "fact_2",
-          competitorName: "Cursor"
+          competitorName: "Cursor",
+          sourceChunkIds: ["chunk_2"]
         }
       ],
       sources: [
