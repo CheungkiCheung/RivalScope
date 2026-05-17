@@ -1,7 +1,8 @@
-import { createWorkflow, type WorkflowNode } from "@rivalscope/core";
+import { createWorkflow } from "@rivalscope/core";
 import {
   InMemoryArtifactStore,
-  createAnalysisWorkflowAgents,
+  createDemoAnalysisWorkflowAgents,
+  createDemoAnalysisWorkflowNodes,
   runWorkflow
 } from "@rivalscope/agents";
 import {
@@ -24,35 +25,24 @@ export async function runAnalysis(projectId: string) {
   }
 
   const artifacts = new InMemoryArtifactStore();
-  const sourceChunks = project.sources.flatMap((source) =>
-    source.chunks.map((chunk) => ({
-      id: chunk.id,
-      sourceId: source.id,
-      ordinal: chunk.ordinal,
-      text: chunk.text,
-      tokenCount: chunk.tokenCount
-    }))
-  );
-
-  const sourceArtifact = artifacts.put({
-    kind: "source_chunks",
-    value: {
-      projectId,
-      chunks: sourceChunks
-    }
-  });
   const requirementsArtifact = artifacts.put({
     kind: "analysis_requirements",
     value: {
+      projectId,
       requiredDimensions: project.analysisDimensions
         .filter((dimension) => dimension.required)
-        .map((dimension) => dimension.key)
+        .map((dimension) => dimension.key),
+      competitors: project.competitors.map((competitor) => ({
+        id: competitor.id,
+        name: competitor.name,
+        website: competitor.website
+      }))
     }
   });
   const workflow = createWorkflow({
     id: `workflow_${projectId}`,
     projectId,
-    nodes: buildMvpWorkflowNodes([sourceArtifact.id, requirementsArtifact.id])
+    nodes: createDemoAnalysisWorkflowNodes([requirementsArtifact.id])
   });
 
   const workflowRecord = await new WorkflowRepository(prisma).create({
@@ -73,7 +63,7 @@ export async function runAnalysis(projectId: string) {
   const result = await runWorkflow({
     workflow,
     artifacts,
-    agents: createAnalysisWorkflowAgents()
+    agents: createDemoAnalysisWorkflowAgents()
   });
 
   const workflowRepository = new WorkflowRepository(prisma);
@@ -109,53 +99,4 @@ export async function runAnalysis(projectId: string) {
     agentRuns: result.agentRuns,
     artifacts: persisted.artifacts
   };
-}
-
-function buildMvpWorkflowNodes(inputArtifactIds: string[]): WorkflowNode[] {
-  return [
-    {
-      id: "extract",
-      type: "agent",
-      agentName: "extract",
-      dependsOn: [],
-      status: "pending",
-      inputArtifactIds,
-      outputArtifactIds: [],
-      retryCount: 0,
-      maxRetries: 1
-    },
-    {
-      id: "analyze",
-      type: "agent",
-      agentName: "analyze",
-      dependsOn: ["extract"],
-      status: "pending",
-      inputArtifactIds: [],
-      outputArtifactIds: [],
-      retryCount: 0,
-      maxRetries: 1
-    },
-    {
-      id: "write",
-      type: "agent",
-      agentName: "write",
-      dependsOn: ["analyze"],
-      status: "pending",
-      inputArtifactIds: [],
-      outputArtifactIds: [],
-      retryCount: 0,
-      maxRetries: 1
-    },
-    {
-      id: "critique",
-      type: "agent",
-      agentName: "critique",
-      dependsOn: ["write"],
-      status: "pending",
-      inputArtifactIds: [],
-      outputArtifactIds: [],
-      retryCount: 0,
-      maxRetries: 1
-    }
-  ];
 }

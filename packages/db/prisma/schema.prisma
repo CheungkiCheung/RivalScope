@@ -47,25 +47,95 @@ enum ClaimKind {
   RECOMMENDATION
 }
 
+enum EvidenceSpanType {
+  SUPPORTING
+  COUNTER
+  CONTEXT
+}
+
+enum AtomicFactPolarity {
+  SUPPORTS
+  CONTRADICTS
+  CONTEXT
+}
+
+enum ClaimType {
+  CAPABILITY
+  PRICING
+  POSITIONING
+  RISK
+  RECOMMENDATION
+}
+
+enum ClaimStatus {
+  DRAFT
+  NEEDS_EVIDENCE
+  NEEDS_REVIEW
+  APPROVED
+  REJECTED
+}
+
+enum ClaimVerdict {
+  SUPPORTED
+  NEEDS_MORE_EVIDENCE
+  REFUTED
+  HYPOTHESIS
+}
+
 enum ReportStatus {
   DRAFT
   REVIEWED
   FINAL
 }
 
+enum ReportBlockStatus {
+  DRAFT
+  READY
+  BLOCKED
+}
+
 enum FindingSeverity {
   LOW
   MEDIUM
   HIGH
+  CRITICAL
 }
 
 enum FindingCategory {
   UNSUPPORTED_CLAIM
   UNKNOWN_FACT
+  UNKNOWN_EVIDENCE_SPAN
   LOW_CONFIDENCE
   UNCITED_REPORT_SECTION
   UNKNOWN_CLAIM
   MISSING_DIMENSION
+  TRACE_GAP
+  COUNTER_EVIDENCE
+  ROLE_VIOLATION
+}
+
+enum FindingTargetType {
+  CLAIM
+  EVIDENCE_SPAN
+  REPORT_BLOCK
+  AGENT_RUN
+}
+
+enum TraceValidationStatus {
+  PASSED
+  FAILED
+  NEEDS_REVIEW
+}
+
+enum TraceEdgeKind {
+  SOURCE_SNAPSHOT_TO_EVIDENCE_SPAN
+  EVIDENCE_SPAN_TO_ATOMIC_FACT
+  ATOMIC_FACT_TO_CLAIM
+  CLAIM_TO_REPORT_BLOCK
+  TRACE_VALIDATED_BY
+  SUPPORTS
+  REFUTES
+  QUALIFIES
 }
 
 model User {
@@ -90,12 +160,20 @@ model Project {
   competitors        Competitor[]
   analysisDimensions AnalysisDimension[]
   sources            Source[]
+  sourceSnapshots    SourceSnapshot[]
+  evidenceSpans      EvidenceSpan[]
+  atomicFacts        AtomicFact[]
+  knowledgeItems     KnowledgeItem[]
   facts              Fact[]
   claims             Claim[]
   workflows          Workflow[]
   reports            Report[]
+  reportBlocks       ReportBlock[]
   artifacts          Artifact[]
   reviewFindings     ReviewFinding[]
+  traceEdges         TraceEdge[]
+  traceValidations   TraceValidationResult[]
+  modelRuns          ModelRun[]
   humanFeedback      HumanFeedback[]
 
   @@index([ownerId])
@@ -112,6 +190,8 @@ model Competitor {
 
   project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
   facts   Fact[]
+  atomicFacts AtomicFact[]
+  knowledgeItems KnowledgeItem[]
 
   @@index([projectId])
 }
@@ -145,6 +225,117 @@ model Source {
   chunks  SourceChunk[]
 
   @@index([projectId])
+}
+
+model SourceSnapshot {
+  id           String     @id @default(cuid())
+  projectId    String
+  sourceId     String
+  sourceKind   SourceKind
+  title        String
+  canonicalUrl String
+  retrievedAt  DateTime
+  contentHash  String
+  rawText      String
+  metadata     Json
+  createdAt    DateTime   @default(now())
+
+  project       Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  evidenceSpans EvidenceSpan[]
+
+  @@index([projectId])
+  @@index([sourceId])
+  @@unique([projectId, contentHash])
+}
+
+model EvidenceSpan {
+  id           String           @id @default(cuid())
+  projectId    String
+  snapshotId   String
+  sourceId     String
+  text         String
+  startOffset  Int
+  endOffset    Int
+  quoteHash    String
+  spanType     EvidenceSpanType
+  qualityScore Float
+  capturedAt   DateTime
+  createdAt    DateTime         @default(now())
+
+  project      Project                @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  snapshot     SourceSnapshot         @relation(fields: [snapshotId], references: [id], onDelete: Cascade)
+  atomicFacts  AtomicFactEvidenceSpan[]
+  claims       ClaimEvidenceSpan[]
+  reportBlocks ReportBlockEvidenceSpan[]
+
+  @@index([projectId])
+  @@index([snapshotId])
+  @@index([sourceId])
+}
+
+model AtomicFact {
+  id           String             @id @default(cuid())
+  projectId    String
+  competitorId String
+  dimension    String
+  statement    String
+  confidence   Float
+  polarity     AtomicFactPolarity
+  extractedAt  DateTime
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+
+  project       Project                  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  competitor    Competitor               @relation(fields: [competitorId], references: [id], onDelete: Cascade)
+  evidenceSpans AtomicFactEvidenceSpan[]
+  knowledgeItems KnowledgeItemAtomicFact[]
+  claims        ClaimAtomicFact[]
+
+  @@index([projectId])
+  @@index([competitorId])
+  @@index([dimension])
+}
+
+model AtomicFactEvidenceSpan {
+  atomicFactId   String
+  evidenceSpanId String
+
+  atomicFact   AtomicFact   @relation(fields: [atomicFactId], references: [id], onDelete: Cascade)
+  evidenceSpan EvidenceSpan @relation(fields: [evidenceSpanId], references: [id], onDelete: Cascade)
+
+  @@id([atomicFactId, evidenceSpanId])
+  @@index([evidenceSpanId])
+}
+
+model KnowledgeItem {
+  id           String   @id @default(cuid())
+  projectId    String
+  competitorId String
+  dimension    String
+  label        String
+  summary      String
+  confidence   Float
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  project     Project                   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  competitor  Competitor                @relation(fields: [competitorId], references: [id], onDelete: Cascade)
+  atomicFacts KnowledgeItemAtomicFact[]
+
+  @@index([projectId])
+  @@index([competitorId])
+  @@index([dimension])
+}
+
+model KnowledgeItemAtomicFact {
+  knowledgeItemId String
+  atomicFactId    String
+
+  knowledgeItem KnowledgeItem @relation(fields: [knowledgeItemId], references: [id], onDelete: Cascade)
+  atomicFact    AtomicFact    @relation(fields: [atomicFactId], references: [id], onDelete: Cascade)
+
+  @@id([knowledgeItemId, atomicFactId])
+  @@index([atomicFactId])
 }
 
 model SourceChunk {
@@ -194,22 +385,34 @@ model FactSourceChunk {
 }
 
 model Claim {
-  id         String    @id @default(cuid())
-  projectId  String
-  dimension  String
-  statement  String
-  confidence Float
-  kind       ClaimKind
-  createdAt  DateTime  @default(now())
-  updatedAt  DateTime  @updatedAt
+  id                   String       @id @default(cuid())
+  projectId            String
+  dimension            String
+  statement            String
+  confidence           Float
+  confidenceBreakdown  Json?
+  sourceQuality        Float?
+  freshness            Float?
+  counterEvidenceCount Int          @default(0)
+  kind                 ClaimKind
+  type                 ClaimType?
+  status               ClaimStatus  @default(DRAFT)
+  verdict              ClaimVerdict @default(HYPOTHESIS)
+  createdAt            DateTime     @default(now())
+  updatedAt            DateTime     @updatedAt
 
-  project        Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  project        Project               @relation(fields: [projectId], references: [id], onDelete: Cascade)
   facts          ClaimFact[]
+  atomicFacts    ClaimAtomicFact[]
+  evidenceSpans  ClaimEvidenceSpan[]
   reportSections ReportSectionClaim[]
+  reportBlocks   ReportBlockClaim[]
   feedback       HumanFeedback[]
 
   @@index([projectId])
   @@index([dimension])
+  @@index([status])
+  @@index([verdict])
 }
 
 model ClaimFact {
@@ -221,6 +424,28 @@ model ClaimFact {
 
   @@id([claimId, factId])
   @@index([factId])
+}
+
+model ClaimAtomicFact {
+  claimId      String
+  atomicFactId String
+
+  claim      Claim      @relation(fields: [claimId], references: [id], onDelete: Cascade)
+  atomicFact AtomicFact @relation(fields: [atomicFactId], references: [id], onDelete: Cascade)
+
+  @@id([claimId, atomicFactId])
+  @@index([atomicFactId])
+}
+
+model ClaimEvidenceSpan {
+  claimId        String
+  evidenceSpanId String
+
+  claim        Claim        @relation(fields: [claimId], references: [id], onDelete: Cascade)
+  evidenceSpan EvidenceSpan @relation(fields: [evidenceSpanId], references: [id], onDelete: Cascade)
+
+  @@id([claimId, evidenceSpanId])
+  @@index([evidenceSpanId])
 }
 
 model Workflow {
@@ -321,6 +546,7 @@ model Report {
 
   project        Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
   sections       ReportSection[]
+  blocks         ReportBlock[]
   reviewFindings ReviewFinding[]
 
   @@index([projectId])
@@ -353,6 +579,50 @@ model ReportSectionClaim {
   @@index([claimId])
 }
 
+model ReportBlock {
+  id        String            @id @default(cuid())
+  projectId String
+  reportId  String?
+  blockKey  String
+  title     String
+  body      String
+  ordinal   Int
+  status    ReportBlockStatus @default(DRAFT)
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
+
+  project       Project                   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  report        Report?                   @relation(fields: [reportId], references: [id], onDelete: SetNull)
+  claims        ReportBlockClaim[]
+  evidenceSpans ReportBlockEvidenceSpan[]
+
+  @@unique([projectId, blockKey])
+  @@index([projectId])
+  @@index([reportId])
+}
+
+model ReportBlockClaim {
+  reportBlockId String
+  claimId       String
+
+  reportBlock ReportBlock @relation(fields: [reportBlockId], references: [id], onDelete: Cascade)
+  claim       Claim       @relation(fields: [claimId], references: [id], onDelete: Cascade)
+
+  @@id([reportBlockId, claimId])
+  @@index([claimId])
+}
+
+model ReportBlockEvidenceSpan {
+  reportBlockId  String
+  evidenceSpanId String
+
+  reportBlock  ReportBlock  @relation(fields: [reportBlockId], references: [id], onDelete: Cascade)
+  evidenceSpan EvidenceSpan @relation(fields: [evidenceSpanId], references: [id], onDelete: Cascade)
+
+  @@id([reportBlockId, evidenceSpanId])
+  @@index([evidenceSpanId])
+}
+
 model ReviewFinding {
   id        String          @id @default(cuid())
   projectId String
@@ -360,6 +630,9 @@ model ReviewFinding {
   severity  FindingSeverity
   category  FindingCategory
   message   String
+  targetType FindingTargetType?
+  targetId   String?
+  agentName  String?
   createdAt DateTime        @default(now())
 
   project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
@@ -369,6 +642,66 @@ model ReviewFinding {
   @@index([reportId])
   @@index([severity])
   @@index([category])
+  @@index([targetType, targetId])
+}
+
+model TraceEdge {
+  id         String        @id @default(cuid())
+  projectId  String
+  fromType   String
+  fromId     String
+  toType     String
+  toId       String
+  kind       TraceEdgeKind
+  metadata   Json?
+  createdAt  DateTime      @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+  @@index([fromType, fromId])
+  @@index([toType, toId])
+  @@index([kind])
+}
+
+model TraceValidationResult {
+  id                     String                @id @default(cuid())
+  projectId              String
+  status                 TraceValidationStatus
+  checkedClaimIds        String[]
+  checkedEvidenceSpanIds String[]
+  reportBlockIds         String[]
+  findings               Json
+  validatedAt            DateTime
+  createdAt              DateTime              @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+  @@index([status])
+}
+
+model ModelRun {
+  id          String         @id @default(cuid())
+  projectId   String
+  agentRunId  String?
+  provider    String
+  model       String
+  promptHash  String
+  input       Json
+  output      Json?
+  status      AgentRunStatus
+  tokenUsage  Json?
+  costUsd     Float?
+  startedAt   DateTime
+  finishedAt  DateTime?
+  createdAt   DateTime       @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+  @@index([agentRunId])
+  @@index([status])
 }
 
 model HumanFeedback {

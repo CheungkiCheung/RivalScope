@@ -66,17 +66,29 @@ export async function runWorkflow(
           undefined,
           { runId }
         );
-        const outputArtifact = input.artifacts.put({
+        const outputArtifacts = [
+          input.artifacts.put({
           kind: result.output.kind,
           value: result.output.value
-        });
+          }),
+          ...(result.output.artifacts ?? []).map((artifact) =>
+            input.artifacts.put({
+              kind: artifact.kind,
+              value: artifact.value
+            })
+          )
+        ];
 
         agentRuns.push({
           nodeId: readyNode.id,
           run: result.run,
           toolCalls: result.toolCalls
         });
-        workflow = succeedNode(workflow, readyNode.id, [outputArtifact.id]);
+        workflow = succeedNode(
+          workflow,
+          readyNode.id,
+          outputArtifacts.map((artifact) => artifact.id)
+        );
       } catch (error) {
         agentRuns.push(getFailedRun(error, readyNode.id, readyNode.agentName));
         workflow = failAndMaybeBlock(

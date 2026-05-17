@@ -7,6 +7,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
+    "test": "vitest run --root ../.. apps/web",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

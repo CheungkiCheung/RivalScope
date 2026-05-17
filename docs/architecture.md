@@ -2,261 +2,395 @@
 
 ## Goal
 
-RivalScope should demonstrate production-style AI Agent engineering:
+RivalScope should behave like a research operating system for competitive
+intelligence:
 
-- Multi-agent collaboration instead of one large prompt.
-- DAG workflow execution instead of hidden sequential calls.
-- Structured artifacts between agents.
-- Evidence-backed claims.
-- Critic review before final report publication.
-- Full observability for every agent run and tool call.
-- Evaluation loops that score both final reports and execution trajectories.
+- Explicit DAG execution instead of hidden sequential prompts.
+- Specialized agents instead of one report-generation prompt.
+- Structured artifacts between every stage.
+- Evidence-backed claims and report sections.
+- Confidence and provenance gates before publication.
+- Observable agent runs, tool calls, artifacts, and review findings.
+- Repeatable evaluations for both final output and execution trajectory.
 
-The architectural north star is not a free-form autonomous chatbot. RivalScope should behave like a research operating system: explicit workflows, typed tools, durable artifacts, reviewable traces, and measurable quality.
+The canonical product and roadmap plan is [master-plan.md](master-plan.md).
 
-## Core Modules
+## AI-Native Architecture Principle
+
+RivalScope should optimize for durable decision quality, not just faster code
+or faster report generation. In practice:
+
+- preserve context in docs and artifacts so new agent sessions do not drift;
+- keep deterministic validators beside model-backed agents;
+- treat model output as candidate data until runtime gates accept it;
+- make adversarial review part of the core workflow;
+- convert human review and benchmark failures into durable system memory.
+
+The architecture therefore favors typed artifacts, explicit DAG state,
+repeatable evals, and observable provenance over hidden prompt chains.
+
+## Runtime Packages
 
 ### `@rivalscope/core`
 
-Owns pure domain logic:
+Owns pure domain logic and should stay free of database, queue, model, and HTTP
+concerns.
 
-- Workflow node statuses and transitions.
+Current responsibilities:
+
+- Workflow node statuses and immutable transitions.
 - DAG readiness checks.
 - Retry and blocking behavior.
-- Source, chunk, fact, claim, and evidence-chain types.
-- Claim evidence validation.
+- SourceSnapshot, EvidenceSpan, AtomicFact, Claim, ReportBlock, and related
+  evidence-chain types.
+- Claim evidence and trace validation.
 
-This package should stay free of database, queue, model, and HTTP concerns.
+Target responsibilities:
+
+- `SourceSnapshot`, `EvidenceSpan`, `AtomicFact`, `KnowledgeItem`, `Claim`,
+  `Insight`, `Recommendation`, and `ReportBlock` domain types.
+- Confidence and publication gate domain rules.
+- Deterministic trace validation rules.
 
 ### `@rivalscope/agents`
 
-Owns agent execution contracts:
+Owns agent execution contracts and workflow runtime.
+
+Current responsibilities:
 
 - `Agent<I, O>` interface.
 - `Tool<I, O>` interface.
 - Zod input/output validation.
 - Agent run records.
 - Tool call records.
+- In-memory artifact store.
 - In-memory workflow runner.
-- Artifact store contract.
-- Mock analysis agents.
+- Deterministic 11-node demo pipeline for the accepted A+B evidence baseline.
 
-Concrete agents will live here once the workflow runner exists.
+Target responsibilities:
+
+- Role contracts and artifact read/write policies.
+- Model-backed agent implementations.
+- Agent-level budget, retry, and failure policies.
+- Typed workflow node definitions.
+- Generator-verifier and targeted-research loops.
 
 ### `@rivalscope/tools`
 
-Owns concrete external capabilities:
+Owns concrete external capabilities.
 
-- Search.
-- URL fetch.
-- HTML parsing.
-- PDF parsing.
-- Chunking.
-- LLM calls.
-- Markdown/PDF export.
+Target responsibilities:
 
-Tools must expose schemas and be observable through `ToolCallRecord`.
+- Search public web sources.
+- Fetch URLs safely.
+- Parse HTML and PDF content.
+- Normalize source metadata.
+- Chunk text with stable IDs.
+- Extract exact evidence spans.
+- Export reports.
+
+Every tool must expose a schema, timeout policy, retry policy, redaction policy,
+and persisted `ToolCallRecord`.
+
+The active Source Tooling plan is
+[source-tooling-design.md](source-tooling-design.md). Its key decision is
+Adapter-Based Evidence Acquisition: Scrapling, Playwright, static HTTP, or other
+services can be plugged in as backend implementations, but RivalScope owns
+source policy, immutable `SourceSnapshot` records, exact `EvidenceSpan`
+extraction, source quality scoring, deduplication, ToolCall observability, and
+downstream provenance.
 
 ### `@rivalscope/db`
 
-Owns the relational persistence model:
+Owns relational persistence.
 
-- Projects, competitors, and required analysis dimensions.
-- Sources and source chunks.
-- Facts, claims, reports, and review findings.
-- Workflows, workflow nodes, agent runs, tool calls, and artifacts.
-- Human feedback for later evaluation loops.
+Current responsibilities:
 
-### `@rivalscope/evals` planned
+- Prisma schema.
+- Project, workflow, artifact, and intelligence repositories.
 
-Owns repeatable quality measurement:
+Target responsibilities:
 
-- Golden projects and expected outputs.
-- Trajectory-level assertions for tool usage and artifact flow.
-- Evidence coverage metrics.
-- Citation validity metrics.
-- Report quality graders.
-- Critic effectiveness metrics.
+- Projects, competitors, dimensions, and analysis runs.
+- Source snapshots, evidence spans, facts, knowledge items, claims, insights,
+  recommendations, reports, and review findings.
+- Workflow nodes, node attempts, agent runs, tool calls, and artifacts.
+- Trace edges and claim revision history.
+- Eval cases, eval runs, grader outputs, and human feedback.
 
-This package should evaluate both the final report and the path taken to produce it.
+### `@rivalscope/evals`
+
+Planned package for repeatable quality measurement.
+
+Target responsibilities:
+
+- Offline benchmark fixtures.
+- Gold evidence spans and gold claims.
+- Seeded defects.
+- Deterministic graders for schemas, evidence chains, role contracts, tool
+  policies, and DAG trajectory.
+- LLM-as-judge rubrics for insight usefulness and recommendation actionability.
+- Baseline comparisons.
 
 ### `apps/web`
 
-Owns the product surface:
+Owns the product surface.
+
+Current responsibilities:
 
 - Project creation.
 - DAG execution trigger.
-- Report review.
-- Evidence-chain inspection.
-- Workflow status.
-- Agent run and tool-call observability.
-- Critic findings.
-- Later: human approval and evaluation review.
+- Legacy project detail UI plus a rejected Module C data-wiring prototype in the
+  local worktree.
 
-## Workflow
+Target responsibilities:
 
-The first production workflow should look like:
+- DAG/timeline view.
+- Agent run detail.
+- Tool call detail.
+- Artifact lineage.
+- Evidence chips.
+- Claim provenance drawer.
+- Confidence explanation.
+- Critic and Skeptic findings.
+- Evaluation dashboard.
+- Optional human approval.
 
-```text
-research -> extract -> analyze -> write -> critique
-```
+## Canonical Artifact Flow
 
-The current in-memory workflow runner already supports the core linear version:
-
-```text
-source_chunks -> Extract Agent -> facts -> Analyst Agent -> claims -> Writer Agent -> report -> Critic Agent -> review_findings
-```
-
-The runner resolves explicit node input artifacts plus all successful ancestor artifacts. This lets Critic Agent inspect the report together with claims and facts, instead of only seeing the immediately preceding Writer output.
-
-Later workflows can branch by competitor or dimension:
+The accepted A+B baseline uses:
 
 ```text
-research_cursor -> extract_cursor
-research_codex  -> extract_codex
-extract_cursor  -> analyze_positioning
-extract_codex   -> analyze_positioning
-analyze_positioning -> write_report -> critique_report
+SourceSnapshot
+  -> EvidenceSpan
+  -> AtomicFact
+  -> Claim
+  -> ReportBlock
 ```
 
-## Next Workflow Direction
-
-The next stage should keep the explicit DAG as the control plane and add research capabilities around it:
+The target system uses:
 
 ```text
-plan_research
-  -> search_competitor_sources
-  -> fetch_and_parse_sources
-  -> chunk_sources
-  -> extract_facts
-  -> synthesize_claims
-  -> write_report
-  -> critique_report
-  -> publish_or_request_revision
+SourceSnapshot
+  -> EvidenceSpan
+  -> AtomicFact
+  -> KnowledgeItem
+  -> Claim
+  -> Insight
+  -> Recommendation
+  -> ReportBlock
 ```
 
-The workflow can branch by competitor and dimension once the linear path has real tools:
+This chain is the trust boundary. Report text is downstream of evidence and
+structured knowledge, not a substitute for them.
+
+## Canonical DAG
+
+The target workflow is:
 
 ```text
 plan_research
-  -> search_cursor       -> fetch_cursor       -> extract_cursor
-  -> search_codex        -> fetch_codex        -> extract_codex
-  -> search_trae         -> fetch_trae         -> extract_trae
-extract_cursor + extract_codex + extract_trae
-  -> synthesize_positioning
-  -> synthesize_pricing
-  -> synthesize_developer_experience
+  -> collect_sources_by_competitor
+  -> snapshot_and_parse_sources
+  -> extract_evidence_spans
+  -> extract_atomic_facts
+  -> structure_knowledge
+  -> synthesize_claims_by_dimension
+  -> skeptic_review
+  -> confidence_scoring
   -> write_report
-  -> critique_report
+  -> critic_review
+  -> trace_validation
+  -> publish_or_revise
 ```
 
-This should be implemented as typed workflow nodes before adding autonomous routing. Free-form planning can be introduced later as a bounded `plan_research` node that proposes a graph or source plan for human approval.
+The DAG should support:
 
-## Evidence Policy
+- Parallel branches by competitor.
+- Parallel branches by analysis dimension.
+- Branch-level failure isolation.
+- Checkpoint and resume.
+- Targeted research sub-DAGs for weak claims.
+- Confidence and trace gates.
+- Optional human approval before publication.
 
-Facts must cite source chunks. Claims must cite facts. Report sections must cite claims.
+## Role Boundaries
 
-A claim without fact evidence is invalid and should be blocked before report finalization. Critic Agent should also review whether the cited evidence actually supports the claim.
+The runtime must enforce role contracts in code. Prompt instructions are not
+enough.
 
-The current Critic Agent checks:
+P0 roles:
 
-- Claims with no cited facts.
-- Claims that cite unknown facts.
-- Claims below the confidence threshold.
-- Report sections with no cited claims.
-- Report sections that cite unknown claims.
-- Required analysis dimensions with no claim coverage.
+- `ResearchPlanner`: writes research plans and DAG branch plans.
+- `Collector`: writes sources and snapshots; cannot emit claims.
+- `Extractor`: writes evidence spans and atomic facts; cannot invent facts.
+- `KnowledgeStructurer`: writes typed competitor knowledge.
+- `Analyst`: writes claims, insights, risks, and recommendations from approved
+  knowledge.
+- `Skeptic`: writes challenge findings and evidence requests.
+- `ConfidenceScorer`: writes confidence records and routing decisions.
+- `Writer`: writes report blocks from approved artifacts only.
+- `Critic`: writes review findings; cannot silently fix the report.
+- `TraceValidator`: deterministically validates lineage; should not call an
+  LLM.
 
-The next version should add semantic groundedness checks, where the Critic compares each claim against cited fact text instead of only validating references.
+Violations should be recorded and should block invalid artifacts.
 
-## Tool Policy
+## Evidence, Confidence, And Publication
 
-Tools are product infrastructure, not helper functions hidden inside prompts.
+Facts must cite evidence. Claims must cite facts. Report blocks must cite claims,
+insights, or recommendations that passed validation.
 
-Every tool should define:
+Each claim should receive:
 
-- Name and role.
-- Zod input schema.
-- Zod output schema.
-- Retry and timeout policy.
-- Redaction policy for stored inputs and outputs.
-- Tool-call record persistence.
+- support verdict: `supported`, `refuted`, `insufficient_evidence`, or
+  `not_checkable`
+- source quality score
+- evidence directness score
+- source independence score
+- freshness fit score
+- contradiction penalty
+- publication decision
 
-The next concrete tools should be:
+Publication rules:
 
-- Search public web sources for competitor evidence.
-- Fetch URL content with safe timeouts and content-size limits.
-- Parse HTML into clean text.
-- Chunk source text with stable chunk IDs.
-- Normalize source metadata.
-- Call an LLM through a provider-neutral model gateway.
+- Supported factual claims may publish if they pass the threshold.
+- Comparative claims need evidence for each side.
+- Trend claims need multiple independent signals.
+- Unsupported claims may become hypotheses or open questions.
+- Refuted claims must not become recommendations.
+- Broken provenance blocks publication.
 
-The model gateway should let mock agents and real LLM-backed agents share the same workflow and persistence contracts.
+## Tool And Model Boundaries
 
-## Evaluation Policy
+Tools are product infrastructure, not hidden prompt helpers.
 
-RivalScope should evaluate both output quality and execution quality.
+Source acquisition tools are defined in
+[source-tooling-design.md](source-tooling-design.md). Scrapling may be used as
+an optional fetch/parse backend, but the TypeScript tool contract and evidence
+artifacts remain the stable system boundary.
 
-Final-output metrics:
+Each tool should define:
 
-- Report completeness against required dimensions.
-- Claim clarity and usefulness.
-- Citation coverage.
-- Overclaiming or unsupported recommendations.
+- name
+- role
+- Zod input schema
+- Zod output schema
+- timeout policy
+- retry policy
+- budget policy
+- redaction policy
+- persisted call record
 
-Trajectory metrics:
+Model calls should go through a provider-neutral model gateway:
 
-- Whether required tools ran.
-- Whether each fact cites a valid chunk.
-- Whether each claim cites at least one valid fact.
-- Whether report sections cite claims.
-- Whether Critic caught injected evidence-chain defects.
-- Whether failed nodes block downstream nodes correctly.
+- real provider adapter behind environment variables
+- deterministic mock client for tests
+- prompt version tracking
+- structured output validation
+- model, token, latency, and cost records
+- schema-failure retries
 
-Evaluation data should live beside the code in a repeatable package, not in ad hoc manual notes.
+The active Model Gateway plan is
+[model-gateway-design.md](model-gateway-design.md). Its key decision is a
+Provider-Neutral Structured Model Gateway: LLMs produce candidate structured
+artifacts, while the RivalScope runtime owns schema validation, role-contract
+validation, evidence-reference validation, budget enforcement, observability,
+artifact commit, and evaluation linkage.
 
-## Observability Policy
+External source content must be treated as untrusted data. It should never
+become executable instruction for an agent.
 
-Every workflow execution should be explainable from stored records:
+## Evaluation Architecture
+
+Evaluation should score output quality and trajectory quality separately.
+
+Benchmark layers:
+
+- RAG grounding.
+- Claim factuality.
+- Agent trajectory.
+- Competitive intelligence usefulness.
+
+Baseline variants:
+
+- `single_llm_report`
+- `standard_rag_report`
+- `linear_agent_pipeline`
+- `rivalscope_full_system`
+
+Score groups:
+
+- `trust_score`
+- `insight_score`
+- `agentops_score`
+- `efficiency_score`
+
+Evaluation data should live in a repeatable package, not in manual notes.
+
+## Observability Architecture
+
+Every run should answer:
 
 - Which agent ran?
-- What input did it receive?
+- Which node triggered it?
+- What input artifacts did it receive?
 - What tools did it call?
-- What output did it produce?
-- How long did it take?
-- What failed and why?
-- Which artifacts moved to the next node?
+- What output artifacts did it produce?
+- Which evidence supports each claim?
+- Which findings challenged the output?
+- Why did a claim publish, revise, downgrade, or fail?
 
-The UI should expose this directly; observability is part of the product.
+The UI should expose observability as a product feature through:
 
-Next observability surfaces:
+- workflow timeline
+- DAG node detail
+- agent run detail
+- tool call detail
+- artifact lineage
+- evidence chips
+- provenance drawer
+- confidence explanation
+- review findings
+- evaluation dashboard
 
-- Timeline view for each workflow run.
-- Agent run detail with input, output, duration, and error state.
-- Tool call detail with sanitized input/output.
-- Artifact lineage from source chunks to report sections.
-- Critic finding drill-down linked to the exact claim, fact, or section.
-- Evaluation result page for regression tracking.
+The active UI plan is [observability-ui-design.md](observability-ui-design.md).
+Its key decision is a Competitive Intelligence Operations Console: dense
+tables for review at scale, inspectors for selected-object details, evidence
+chips for report and claim traceability, drawers for provenance, graph canvases
+for Agent DAG and evidence lineage, and evaluation dashboards for benchmark
+comparison.
 
-## External Reference Decisions
+## Near-Term Engineering Direction
 
-The next-stage architecture borrows patterns from major vendor and open-source agent systems:
+Module A+B is accepted. The immediate next implementation slice is Module C:
+Multi-Page Observability UI. It must use the accepted A+B read model and must
+not collapse the product into one project detail page.
 
-- OpenAI Agents SDK: tracing, guardrails, handoffs, and workflow evaluation.
-- Anthropic agent guidance: workflow-first design and structured tools.
-- Google ADK: progressive path from workflow agents to multi-agent systems.
-- AWS Bedrock Agents: supervisor/collaborator decomposition.
-- LangGraph and Microsoft Agent Framework: graph execution, checkpoints, and human-in-the-loop.
-- Open Deep Research and DeerFlow: research/report generation workflow structure.
-- Langfuse and Pydantic AI: observability, datasets, evals, and type-safe outputs.
+After Module C is accepted, the next high-leverage product slice should
+prioritize:
 
-The project should borrow these patterns without replacing the current control plane. A framework migration is not a next-stage goal.
+```text
+SourceSnapshot + EvidenceSpan
+  -> real source tooling
+  -> model gateway
+  -> real Extractor / Analyst
+  -> confidence and trace gates
+  -> clickable provenance UI
+  -> eval baseline comparison
+```
 
-## Non-Goals For The Next Stage
+This slice most directly supports the competition thesis and turns the MVP from
+a mock agent pipeline into a credible competitive intelligence system.
 
-- No universal autonomous planner.
-- No agent marketplace.
-- No A2A protocol layer.
-- No low-code workflow builder.
-- No fine-tuning or reward loop before a stable eval dataset exists.
-- No framework rewrite unless the current runner becomes the bottleneck.
+## Non-Goals
+
+These are not near-term goals:
+
+- Universal autonomous planner.
+- Agent marketplace.
+- A2A protocol layer.
+- Low-code workflow builder.
+- Fine-tuning before stable eval data.
+- Framework rewrite to LangGraph, AutoGen, CrewAI, or another runtime before
+  the current runner becomes the bottleneck.

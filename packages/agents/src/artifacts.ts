@@ -1,10 +1,22 @@
 export type ArtifactKind =
   | "analysis_requirements"
+  | "source_candidates"
+  | "policy_decisions"
+  | "source_snapshots"
+  | "parsed_documents"
+  | "evidence_spans"
+  | "atomic_facts"
+  | "knowledge_items"
   | "source_chunks"
   | "facts"
   | "claims"
+  | "insights"
+  | "recommendations"
   | "report"
-  | "review_findings";
+  | "report_blocks"
+  | "review_findings"
+  | "trace_validation"
+  | "model_runs";
 
 export interface Artifact<T = unknown> {
   id: string;

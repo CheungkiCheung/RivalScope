@@ -1,13 +1,22 @@
 import type {
   AgentRunStatus,
+  AtomicFactPolarity,
   ClaimKind,
+  ClaimStatus,
+  ClaimType,
+  ClaimVerdict,
+  EvidenceSpanType,
   FindingCategory,
   FindingSeverity,
+  FindingTargetType,
   Prisma,
   PrismaClient,
+  ReportBlockStatus,
   ReportStatus,
   SourceKind,
   ToolCallStatus,
+  TraceEdgeKind,
+  TraceValidationStatus,
   WorkflowNodeStatus,
   WorkflowNodeType
 } from "@prisma/client";
@@ -81,6 +90,61 @@ export interface CreateClaimInput {
   confidence: number;
   kind: ClaimKind;
   factIds: string[];
+  atomicFactIds?: string[];
+  evidenceSpanIds?: string[];
+  confidenceBreakdown?: Prisma.InputJsonValue;
+  sourceQuality?: number;
+  freshness?: number;
+  counterEvidenceCount?: number;
+  type?: ClaimType;
+  status?: ClaimStatus;
+  verdict?: ClaimVerdict;
+}
+
+export interface CreateSourceSnapshotInput {
+  projectId: string;
+  sourceId: string;
+  sourceKind: SourceKind;
+  title: string;
+  canonicalUrl: string;
+  retrievedAt: Date;
+  contentHash: string;
+  rawText: string;
+  metadata: Prisma.InputJsonValue;
+}
+
+export interface CreateEvidenceSpanInput {
+  projectId: string;
+  snapshotId: string;
+  sourceId: string;
+  text: string;
+  startOffset: number;
+  endOffset: number;
+  quoteHash: string;
+  spanType: EvidenceSpanType;
+  qualityScore: number;
+  capturedAt: Date;
+}
+
+export interface CreateAtomicFactInput {
+  projectId: string;
+  competitorId: string;
+  dimension: string;
+  statement: string;
+  confidence: number;
+  polarity: AtomicFactPolarity;
+  extractedAt: Date;
+  evidenceSpanIds: string[];
+}
+
+export interface CreateKnowledgeItemInput {
+  projectId: string;
+  competitorId: string;
+  dimension: string;
+  label: string;
+  summary: string;
+  confidence: number;
+  atomicFactIds: string[];
 }
 
 export interface CreateReportInput {
@@ -94,6 +158,8 @@ export interface CreateReportInput {
     body: string;
     ordinal: number;
     claimIds: string[];
+    evidenceSpanIds?: string[];
+    status?: ReportBlockStatus;
   }>;
 }
 
@@ -103,6 +169,44 @@ export interface CreateReviewFindingInput {
   severity: FindingSeverity;
   category: FindingCategory;
   message: string;
+  targetType?: FindingTargetType;
+  targetId?: string;
+  agentName?: string;
+}
+
+export interface CreateTraceValidationResultInput {
+  projectId: string;
+  status: TraceValidationStatus;
+  checkedClaimIds: string[];
+  checkedEvidenceSpanIds: string[];
+  reportBlockIds: string[];
+  findings: Prisma.InputJsonValue;
+  validatedAt: Date;
+}
+
+export interface CreateTraceEdgeInput {
+  projectId: string;
+  fromType: string;
+  fromId: string;
+  toType: string;
+  toId: string;
+  kind: TraceEdgeKind;
+  metadata?: Prisma.InputJsonValue;
+}
+
+export interface CreateModelRunInput {
+  projectId: string;
+  agentRunId?: string;
+  provider: string;
+  model: string;
+  promptHash: string;
+  input: Prisma.InputJsonValue;
+  output?: Prisma.InputJsonValue;
+  status: AgentRunStatus;
+  tokenUsage?: Prisma.InputJsonValue;
+  costUsd?: number;
+  startedAt: Date;
+  finishedAt?: Date;
 }
 
 export class ProjectRepository {
@@ -164,6 +268,33 @@ export class ProjectRepository {
         competitors: true,
         analysisDimensions: true,
         sources: { include: { chunks: true } },
+        sourceSnapshots: {
+          include: {
+            evidenceSpans: true
+          },
+          orderBy: { retrievedAt: "desc" }
+        },
+        atomicFacts: {
+          include: {
+            competitor: true,
+            evidenceSpans: { include: { evidenceSpan: true } }
+          },
+          orderBy: { createdAt: "asc" }
+        },
+        knowledgeItems: {
+          include: {
+            competitor: true,
+            atomicFacts: { include: { atomicFact: true } }
+          },
+          orderBy: { createdAt: "asc" }
+        },
+        claims: {
+          include: {
+            atomicFacts: { include: { atomicFact: true } },
+            evidenceSpans: { include: { evidenceSpan: true } }
+          },
+          orderBy: { createdAt: "asc" }
+        },
         workflows: {
           orderBy: { createdAt: "desc" },
           take: 1,
@@ -180,6 +311,13 @@ export class ProjectRepository {
         },
         reports: {
           include: {
+            blocks: {
+              include: {
+                claims: { include: { claim: true } },
+                evidenceSpans: { include: { evidenceSpan: true } }
+              },
+              orderBy: { ordinal: "asc" }
+            },
             sections: {
               include: {
                 claims: {
@@ -207,6 +345,16 @@ export class ProjectRepository {
           },
           orderBy: { createdAt: "desc" },
           take: 1
+        },
+        traceValidations: {
+          orderBy: { validatedAt: "desc" },
+          take: 1
+        },
+        traceEdges: {
+          orderBy: { createdAt: "asc" }
+        },
+        modelRuns: {
+          orderBy: { startedAt: "asc" }
         }
       }
     });
@@ -441,6 +589,20 @@ export class ArtifactRepository {
 export class IntelligenceRepository {
   constructor(private readonly db: PrismaClient) {}
 
+  async createSourceSnapshot(input: CreateSourceSnapshotInput) {
+    return this.db.sourceSnapshot.create({
+      data: input,
+      include: { evidenceSpans: true }
+    });
+  }
+
+  async createEvidenceSpan(input: CreateEvidenceSpanInput) {
+    return this.db.evidenceSpan.create({
+      data: input,
+      include: { snapshot: true }
+    });
+  }
+
   async createFact(input: CreateFactInput) {
     return this.db.fact.create({
       data: {
@@ -459,21 +621,111 @@ export class IntelligenceRepository {
     });
   }
 
-  async createClaim(input: CreateClaimInput) {
-    return this.db.claim.create({
+  async createAtomicFact(input: CreateAtomicFactInput) {
+    return this.db.atomicFact.create({
       data: {
         projectId: input.projectId,
+        competitorId: input.competitorId,
         dimension: input.dimension,
         statement: input.statement,
         confidence: input.confidence,
-        kind: input.kind,
-        facts: {
-          create: input.factIds.map((factId) => ({
-            fact: { connect: { id: factId } }
+        polarity: input.polarity,
+        extractedAt: input.extractedAt,
+        evidenceSpans: {
+          create: input.evidenceSpanIds.map((evidenceSpanId) => ({
+            evidenceSpan: { connect: { id: evidenceSpanId } }
           }))
         }
       },
-      include: { facts: true }
+      include: { evidenceSpans: true }
+    });
+  }
+
+  async createKnowledgeItem(input: CreateKnowledgeItemInput) {
+    return this.db.knowledgeItem.create({
+      data: {
+        projectId: input.projectId,
+        competitorId: input.competitorId,
+        dimension: input.dimension,
+        label: input.label,
+        summary: input.summary,
+        confidence: input.confidence,
+        atomicFacts: {
+          create: input.atomicFactIds.map((atomicFactId) => ({
+            atomicFact: { connect: { id: atomicFactId } }
+          }))
+        }
+      },
+      include: { atomicFacts: true }
+    });
+  }
+
+  async createClaim(input: CreateClaimInput) {
+    const usesSnapshotEvidence = (input.evidenceSpanIds?.length ?? 0) > 0;
+    const legacyFactIds = usesSnapshotEvidence ? [] : input.factIds;
+    const atomicFactIds = input.atomicFactIds ?? (usesSnapshotEvidence ? input.factIds : []);
+
+    if ((input.atomicFactIds?.length ?? 0) > 0 && input.evidenceSpanIds?.length === 0) {
+      throw new Error("Snapshot claim creation requires at least one evidence span");
+    }
+
+    if ((input.evidenceSpanIds?.length ?? 0) > 0 && atomicFactIds.length === 0) {
+      throw new Error("Snapshot claim creation requires at least one atomic fact");
+    }
+
+    const data: Prisma.ClaimUncheckedCreateInput = {
+      projectId: input.projectId,
+      dimension: input.dimension,
+      statement: input.statement,
+      confidence: input.confidence,
+        kind: input.kind,
+        counterEvidenceCount: input.counterEvidenceCount ?? 0
+      };
+
+    if (input.confidenceBreakdown !== undefined) {
+      data.confidenceBreakdown = input.confidenceBreakdown;
+    }
+
+    if (input.sourceQuality !== undefined) {
+      data.sourceQuality = input.sourceQuality;
+    }
+
+    if (input.freshness !== undefined) {
+      data.freshness = input.freshness;
+    }
+
+    if (input.type !== undefined) {
+      data.type = input.type;
+    }
+
+    if (input.status !== undefined) {
+      data.status = input.status;
+    }
+
+    if (input.verdict !== undefined) {
+      data.verdict = input.verdict;
+    }
+
+    return this.db.claim.create({
+      data: {
+        ...data,
+        facts: {
+          create: legacyFactIds.map((factId) => ({
+            fact: { connect: { id: factId } }
+          }))
+        },
+        atomicFacts: {
+          create: atomicFactIds.map((atomicFactId) => ({
+            atomicFact: { connect: { id: atomicFactId } }
+          }))
+        },
+        evidenceSpans: {
+          create: (input.evidenceSpanIds ?? []).map((evidenceSpanId) => ({
+            evidenceSpan: { connect: { id: evidenceSpanId } }
+          }))
+        }
+      },
+      include: { facts: true, atomicFacts: true, evidenceSpans: true }
     });
   }
 
@@ -494,6 +746,26 @@ export class IntelligenceRepository {
             }))
           }
         }))
+      },
+      blocks: {
+        create: input.sections.map((section) => ({
+          projectId: input.projectId,
+          blockKey: section.sectionKey,
+          title: section.title,
+          body: section.body,
+          ordinal: section.ordinal,
+          status: section.status ?? "DRAFT",
+          claims: {
+            create: section.claimIds.map((claimId) => ({
+              claim: { connect: { id: claimId } }
+            }))
+          },
+          evidenceSpans: {
+            create: (section.evidenceSpanIds ?? []).map((evidenceSpanId) => ({
+              evidenceSpan: { connect: { id: evidenceSpanId } }
+            }))
+          }
+        }))
       }
     };
 
@@ -504,6 +776,10 @@ export class IntelligenceRepository {
     return this.db.report.create({
       data,
       include: {
+        blocks: {
+          include: { claims: true, evidenceSpans: true },
+          orderBy: { ordinal: "asc" }
+        },
         sections: {
           include: { claims: true },
           orderBy: { ordinal: "asc" }
@@ -519,6 +795,45 @@ export class IntelligenceRepository {
 
     return this.db.reviewFinding.createMany({
       data: inputs
+    });
+  }
+
+  async createTraceValidationResult(input: CreateTraceValidationResultInput) {
+    return this.db.traceValidationResult.create({
+      data: input
+    });
+  }
+
+  async createTraceEdges(inputs: CreateTraceEdgeInput[]) {
+    if (inputs.length === 0) {
+      return { count: 0 };
+    }
+
+    return this.db.traceEdge.createMany({
+      data: inputs
+    });
+  }
+
+  async createModelRuns(inputs: CreateModelRunInput[]) {
+    if (inputs.length === 0) {
+      return { count: 0 };
+    }
+
+    return this.db.modelRun.createMany({
+      data: inputs.map((input) => ({
+        projectId: input.projectId,
+        agentRunId: input.agentRunId ?? null,
+        provider: input.provider,
+        model: input.model,
+        promptHash: input.promptHash,
+        input: input.input,
+        ...(input.output !== undefined ? { output: input.output } : {}),
+        status: input.status,
+        ...(input.tokenUsage !== undefined ? { tokenUsage: input.tokenUsage } : {}),
+        ...(input.costUsd !== undefined ? { costUsd: input.costUsd } : {}),
+        startedAt: input.startedAt,
+        ...(input.finishedAt !== undefined ? { finishedAt: input.finishedAt } : {})
+      }))
     });
   }
 }
